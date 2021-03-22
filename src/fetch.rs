@@ -6,7 +6,7 @@ use async_std::fs::File;
 use async_std::path::Path;
 use async_std::prelude::*;
 use futures::future::BoxFuture;
-use futures::TryFutureExt;
+use futures::{TryFutureExt};
 use std::borrow::Borrow;
 
 /// The operation system being used
@@ -70,29 +70,28 @@ pub struct PostgresVersion(
 );
 
 /// Postgres version 13
-const PG_V13: PostgresVersion =
+pub const PG_V13: PostgresVersion =
     PostgresVersion("13.1.0-1");
 /// Postgres version 12
-const PG_V12: PostgresVersion =
+pub const PG_V12: PostgresVersion =
     PostgresVersion("12.1.0-1");
 /// Postgres version 11
-const PG_V11: PostgresVersion =
+pub const PG_V11: PostgresVersion =
     PostgresVersion("11.6.0-1");
 /// Postgres version 10
-const PG_V10: PostgresVersion =
+pub const PG_V10: PostgresVersion =
     PostgresVersion("10.11.0-1");
 /// Postgres version 9
-const PG_V9: PostgresVersion =
+pub const PG_V9: PostgresVersion =
     PostgresVersion("9.6.16-1");
 
 /// Settings that determine the postgres binary to be fetched
 pub struct FetchSettings {
     pub host: String,
     pub operating_system:
-        OperationSystem,
+    OperationSystem,
     pub architecture: Architecture,
     pub version: PostgresVersion,
-    pub data_path: String,
 }
 
 impl Default for FetchSettings {
@@ -104,14 +103,13 @@ impl Default for FetchSettings {
             architecture:
             Architecture::Amd64,
             version: PG_V13,
-            data_path: "./data".to_string(),
         }
     }
 }
 
 impl FetchSettings {
     /// get the platform string needed to determine the download path
-    fn platform_str(&self) -> String {
+    fn platform(&self) -> String {
         let os = self
             .operating_system
             .to_string();
@@ -129,211 +127,107 @@ impl FetchSettings {
 /// The [FetchSettings](settings) parameter determines which binary to load.
 /// Returns the file name of the downloaded binary in an `Ok(String)` on success, otherwise returns an error.
 ///
-pub fn fetch_postgres<'a>(
-    settings: FetchSettings,
-) -> BoxFuture<'a, anyhow::Result<String>>
+pub async fn fetch_postgres(
+    settings: &FetchSettings, executable_path: &str,
+) -> anyhow::Result<String>
 {
-    Box::pin(async move {
-        // download binary
-        let platform =
-            settings.platform_str();
-        let download_url = format!(
-            "{}/maven2/io/zonky/test/postgres/embedded-postgres-binaries-{}/{}/embedded-postgres-binaries-{}-{}.jar",
-            &settings.host,
-            &platform,
-            &settings.version.0,
-            &platform,
-            &settings.version.0);
-        let mut response =
-            surf::get(download_url).map_err(|e| anyhow!("could not load postgres binaries. status = {:?}", e))
-                .await?;
+    // download binary
+    let platform =
+        settings.platform();
+    let download_url = format!(
+        "{}/maven2/io/zonky/test/postgres/embedded-postgres-binaries-{}/{}/embedded-postgres-binaries-{}-{}.jar",
+        &settings.host,
+        &platform,
+        &settings.version.0,
+        &platform,
+        &settings.version.0);
+    let mut response =
+        surf::get(download_url).map_err(|e| anyhow!("could not load postgres binaries. status = {:?}", e))
+            .await?;
 
-        // write binary to file
-        let file_path = format!(
-            "{}/{}-{}.zip",
-            &settings.data_path,
-            platform,
-            &settings.version.0
-        );
-        let path =
-            Path::new(&file_path);
-        async_std::fs::create_dir_all(
-            &settings.data_path,
-        )
+    // write binary to file
+    let file_name = format!(
+        "{}-{}.zip",
+        platform,
+        &settings.version.0
+    );
+    let file_path = format!(
+        "{}/{}",
+        &executable_path,
+        &file_name,
+    );
+    let path =
+        Path::new(&file_path);
+    async_std::fs::create_dir_all(
+        executable_path,
+    )
         .await?;
-        let mut file =
-            File::create(&path).await?;
-        let content = response
-            .body_bytes().map_err(|e| anyhow!("response byte conversion error. status = {:?}", e))
-            .await?;
-        file.write_all(&content)
-            .await?;
+    let mut file =
+        File::create(&path).await?;
+    let content = response
+        .body_bytes().map_err(|e| anyhow!("response byte conversion error. status = {:?}", e))
+        .await?;
+    file.write_all(&content)
+        .await?;
 
-        Ok(file_path)
-    })
+    Ok(file_name)
 }
 
-fn unpack(
-    file_path: &str,
+pub async fn unpack_postgres(
+    file_name: &str, executables_path: &str,
 ) -> anyhow::Result<()> {
+    let file_path = format!("{}/{}", executables_path, file_name);
     let path = std::path::Path::new(
         &file_path,
     );
-    let base_path = path.parent();
     let mut zip =
         archiver_rs::Zip::open(&path)?;
-    let file_name = zip
-        .files()?
+    let files = zip.files()?;
+    let compressed_file_name = files
         .into_iter()
         .find(|file_name| {
             file_name.ends_with(".txz")
-        });
-    if let Some(file_name) = file_name {
-        let target_name =
-            match base_path {
-                Some(base_path) => {
-                    format!(
-                        "{}/{}",
-                        base_path
-                            .to_str()
-                            .unwrap(),
-                        &file_name
-                    )
-                }
-                None => {
-                    file_name.to_owned()
-                }
-            };
-        let target_path =
-            std::path::Path::new(
-                &target_name,
-            );
-        zip.extract_single(
-            &target_path,
-            file_name,
-        );
-        let mut xz =
-            archiver_rs::Xz::open(
+        }).map(|x| x.strip_suffix(".txz").unwrap());
+    match compressed_file_name{
+        Some(compressed_file_name) => {
+            let target_name = format!("{}/{}.txz", &executables_path, &compressed_file_name);
+            let target_path =
+                std::path::Path::new(
+                    &target_name,
+                );
+            zip.extract_single(
                 &target_path,
+                target_name.clone(),
             )?;
-        let target_path =
-            std::path::Path::new(
-                "data/test.tar",
-            );
-        xz.decompress(target_path);
+            let mut xz =
+                archiver_rs::Xz::open(
+                    &target_path,
+                )?;
+            let target_name = format!("{}/{}.tar", &executables_path, &compressed_file_name);
+            let target_path =
+                std::path::Path::new(
+                    &target_name,
+                );
+            xz.decompress(target_path)?;
 
-        let mut tar =
-            archiver_rs::Tar::open(
-                &target_path,
-            )?;
+            let mut tar =
+                archiver_rs::Tar::open(
+                    &target_path,
+                )?;
 
-        let target_path =
-            std::path::Path::new(
-                "data/postgres/",
-            );
+            let target_path =
+                std::path::Path::new(
+                    &executables_path,
+                );
 
-        tar.extract(target_path);
+            Ok(tar.extract(target_path)?)
+        }
+        None => {
+            Err(anyhow!("could not unpack postgres zip"))
+        }
     }
-    Ok(())
 }
 
-// fn unzip(
-//     file_path: &str,
-// ) -> anyhow::Result<()> {
-//     let fname =
-//         std::path::Path::new(file_path);
-//     let fparent = fname.parent();
-//     let file =
-//         std::fs::File::open(&fname)?;
-//     let mut archive =
-//         zip::ZipArchive::new(file)?;
-//     for i in 0..archive.len() {
-//         let mut file =
-//             archive.by_index(i)?;
-//         if file.name().ends_with(".txz")
-//         {
-//             let outpath = match file
-//                 .enclosed_name()
-//             {
-//                 Some(path) => {
-//                     match fparent {
-//                         Some(
-//                             parent_path,
-//                         ) => {
-//                             let fullpath = format!("{}/{}", parent_path.to_str().unwrap(), path.to_str().unwrap());
-//                             std::path::Path::new(&fullpath).to_owned()
-//                         }
-//                         None => path
-//                             .to_owned(),
-//                     }
-//                 }
-//                 None => continue,
-//             };
-//
-//             if let Some(p) =
-//                 outpath.parent()
-//             {
-//                 if !p.exists() {
-//                     std::fs::create_dir_all(&p)?;
-//                 }
-//             }
-//             let mut outfile =
-//                 std::fs::File::create(
-//                     &outpath,
-//                 )?;
-//             std::io::copy(
-//                 &mut file,
-//                 &mut outfile,
-//             )?;
-//         }
-//     }
-//     Ok(())
-// }
-//
-// fn unxz(
-//     file_path: &str,
-// ) -> anyhow::Result<()> {
-//     let mut f = std::io::BufReader::new(
-//         std::fs::File::open(file_path)?,
-//     );
-//     let mut decomp: Vec<u8> =
-//         Vec::new();
-//     lzma_rs::xz_decompress(
-//         &mut f,
-//         &mut decomp,
-//     )?;
-//     Ok(())
-// }
-//
-// fn untar(
-//     file_path: &str,
-// ) -> anyhow::Result<()> {
-//     let file =
-//         std::fs::File::open(file_path)?;
-//     let mut a = tar::Archive::new(file);
-//
-//     for file in a.entries()? {
-//         // Make sure there wasn't an I/O error
-//         let mut file_entry = file?;
-//         let file_path =
-//             file_entry.path()?;
-//         let outpath: &std::path::Path =
-//             file_path.borrow();
-//         println!(
-//             "outpath: {:?}",
-//             &outpath
-//         );
-//         let mut outfile =
-//             std::fs::File::create(
-//                 outpath,
-//             )?;
-//         std::io::copy(
-//             &mut file_entry,
-//             &mut outfile,
-//         )?;
-//     }
-//     Ok(())
-// }
 
 #[cfg(test)]
 mod test_fetch {

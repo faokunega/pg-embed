@@ -1,95 +1,140 @@
 use futures::future::BoxFuture;
 use futures::AsyncWriteExt;
-use std::process::Command;
+use std::process::{Command, Child};
+use crate::fetch;
 
 ///
-/// Create database password file
+/// Database settings
 ///
-pub fn create_password_file<'a>(
-    location: &'a str,
-    password: &'a str,
-) -> BoxFuture<'a, anyhow::Result<()>> {
-    Box::pin(async move {
+pub struct PgSettings {
+    /// postgresql executables directory
+    pub executables_dir: String,
+    /// postgresql database directory
+    pub database_dir: String,
+    /// postgresql user name
+    pub user: String,
+    /// postgresql password
+    pub password: String,
+    /// persist database
+    pub persistent: bool,
+}
+
+///
+/// Embedded postgresql database
+///
+pub struct PgEmbed {
+    pub pg_settings: PgSettings,
+    pub fetch_settings: fetch::FetchSettings,
+}
+
+impl PgEmbed {
+
+    pub fn new(pg_settings: PgSettings, fetch_settings: fetch::FetchSettings) -> Self {
+        PgEmbed{
+            pg_settings,
+            fetch_settings
+        }
+    }
+
+    ///
+    /// Download and unpack postgres binaries
+    ///
+    pub async fn aquire_postgres(&self) -> anyhow::Result<()> {
+        let pg_file = fetch::fetch_postgres(&self.fetch_settings, &self.pg_settings.executables_dir).await?;
+        fetch::unpack_postgres(&pg_file, &self.pg_settings.executables_dir).await
+    }
+
+    ///
+    /// Initialize postgresql database
+    ///
+    /// Returns the child process `Ok(Child)` on success, otherwise returns an error.
+    ///
+    pub async fn init_db(&self) -> anyhow::Result<Child> {
+        let init_db_executable = format!("{}/bin/initdb", &self.pg_settings.executables_dir);
+        let password_file_arg = format!("--pwfile={}/pwfile", &self.pg_settings.executables_dir);
+        let process = Command::new(
+            init_db_executable,
+        )
+            .args(&[
+                "-A",
+                &self.pg_settings.password,
+                "-U",
+                &self.pg_settings.user,
+                "postgres",
+                "-D",
+                &self.pg_settings.database_dir,
+                &password_file_arg,
+            ])
+            .spawn()
+            .expect(
+                "failed to execute process",
+            );
+        Ok(process)
+    }
+
+    ///
+    /// Start postgresql database
+    ///
+    /// Returns the child process `Ok(Child)` on success, otherwise returns an error.
+    ///
+    pub async fn start_db(&self) -> anyhow::Result<Child> {
+        let pg_ctl_executable = format!("{}/bin/pg_ctl", &self.pg_settings.executables_dir);
+        let process = Command::new(
+            pg_ctl_executable,
+        )
+            .args(&[
+                "start", "-w", "-D", &self.pg_settings.database_dir,
+            ])
+            .spawn()
+            .expect(
+                "failed to execute process",
+            );
+        Ok(process)
+    }
+
+    ///
+    /// Stop postgresql database
+    ///
+    ///
+    pub async fn stop_db(&self) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    ///
+    /// Create a database password file
+    ///
+    pub async fn create_password_file(&self) -> anyhow::Result<()> {
         let file_path = format!(
             "{}/{}",
-            location, "pwfile"
+            &self.pg_settings.executables_dir, "pwfile"
         );
         let mut file = async_std::fs::File::create(&file_path).await?;
         let _ = file
-            .write(password.as_bytes())
+            .write(&self.pg_settings.password.as_bytes())
             .await?;
         Ok(())
-    })
-}
-
-///
-/// Initialize postgresql database
-///
-pub fn init_db(
-    location: &str,
-    user_name: &str,
-) -> anyhow::Result<()> {
-    Command::new(
-        "./data/postgres/bin/initdb",
-    )
-    .args(&[
-        "-A",
-        "password",
-        "-U",
-        user_name,
-        "postgres",
-        "-D",
-        location,
-        "--pwfile=data/pwfile",
-    ])
-    .output()
-    .expect(
-        "failed to execute process",
-    );
-    Ok(())
-}
-
-///
-/// Start postgresql database
-///
-pub fn start_db(
-    location: &str,
-) -> anyhow::Result<()> {
-    Command::new(
-        "./data/postgres/bin/pg_ctl",
-    )
-    .args(&[
-        "start", "-w", "-D", location,
-    ])
-    .output()
-    .expect(
-        "failed to execute process",
-    );
-    Ok(())
+    }
 }
 
 #[cfg(test)]
 mod postgres_tests {
     use super::*;
 
-    #[test]
-    fn postgres_start(
-    ) -> anyhow::Result<()> {
-        start_db("data/db")
-    }
-
-    #[async_std::test]
-    async fn password_file_creation(
-    ) -> anyhow::Result<()> {
-        create_password_file(
-            "data", "password",
-        )
-        .await
-    }
-
-    #[test]
-    fn database_initialization(
-    ) -> anyhow::Result<()> {
-        init_db("data/db", "postgres")
-    }
+    // #[test]
+    // fn postgres_start() -> anyhow::Result<()> {
+    //     start_db("data/db")
+    // }
+    //
+    // #[async_std::test]
+    // async fn password_file_creation() -> anyhow::Result<()> {
+    //     create_password_file(
+    //         "data", "password",
+    //     )
+    //         .await
+    // }
+    //
+    // #[test]
+    // fn database_initialization() -> anyhow::Result<()> {
+    //     init_db("data/db", "postgres")
+    // }
 }
