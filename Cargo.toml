@@ -1,0 +1,20 @@
+[package]
+name = "postgres-embedded"
+version = "0.1.0"
+license = "MIT/Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/faokunega/postges-embedded"
+documentation = "https://docs.rs/postgres-embedded"
+description = "Run a real Postgres database locally on Linux, OSX or Windows as part of another Rust application or test."
+edition = "2018"
+keywords = [ "database", "async", "postgres" ]
+categories = [ "database", "asynchronous" ]
+authors = ["Franz-Aliu Okunega <aokunega@gmail.com>"]
+
+[dependencies]
+surf = "2.2"
+futures = "0.3"
+anyhow = "1.0"
+thiserror = "1.0"
+async-std = {version = "1.9", features =["attributes"]}
+archiver-rs = "0.5"
