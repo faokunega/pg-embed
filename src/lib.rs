@@ -1,9 +1,20 @@
 //!
 //! # pg-embed
 //!
+//! [![Crates.io](https://img.shields.io/crates/v/pg-embed)](http://crates.io/crates/pg-embed)
+//! [![Docs.rs](https://docs.rs/pg-embed/badge.svg)](https://docs.rs/pg-embed)
+//! [![Crates.io](https://img.shields.io/crates/d/pg-embed)](http://crates.io/crates/pg-embed)
+//! [![Crates.io](https://img.shields.io/crates/l/pg-embed)](https://github.com/faokunega/pg-embed/blob/master/LICENSE)
+//!
 //! Run a Postgresql database locally on Linux, MacOS or Windows as part of another Rust application or test.
 //!
 //! # Usage
+//!
+//! Import following packages:
+//!
+//! `pg-embed = "0.1"`
+//!
+//! `zip = "0.5.11"`
 //!
 //! A postgresql instance can be created using<br/>
 //! [postgres::PgEmbed]::new([postgres::PgSettings], [fetch::FetchSettings]) <br/>
@@ -46,7 +57,7 @@
 //!
 //!     /// stop postgresql database
 //!     pg_emb.stop_db().await;
-//! }
+//! };
 //!
 //!
 //! ```
