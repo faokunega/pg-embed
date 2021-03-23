@@ -35,6 +35,9 @@
 //!     /// download postgresql
 //!     pg_emb.aquire_postgres().await;
 //!
+//!     /// create database password file
+//!     pg_emb.create_password_file().await;
+//!
 //!     /// initialize postgresql database
 //!     pg_emb.init_db().await;
 //!
