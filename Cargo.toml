@@ -7,7 +7,7 @@ repository = "https://github.com/faokunega/pg-embed"
 documentation = "https://docs.rs/pg-embed"
 description = "Run a Postgresql database locally on Linux, MacOS or Windows as part of another Rust application or test."
 edition = "2018"
-keywords = [ "database", "postgres", "postgresql", "async", "embedded" ]
+keywords = [ "database", "postgres", "postgresql", "async", "embedded", "server" ]
 categories = [ "database", "database-implementations", "development-tools", "asynchronous" ]
 authors = ["Franz-Aliu Okunega <aokunega@gmail.com>"]
 
