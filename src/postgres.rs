@@ -25,6 +25,7 @@ pub struct PgSettings {
 pub struct PgEmbed {
     pub pg_settings: PgSettings,
     pub fetch_settings: fetch::FetchSettings,
+    pub process: Option<Child>,
 }
 
 impl PgEmbed {
@@ -32,7 +33,8 @@ impl PgEmbed {
     pub fn new(pg_settings: PgSettings, fetch_settings: fetch::FetchSettings) -> Self {
         PgEmbed{
             pg_settings,
-            fetch_settings
+            fetch_settings,
+            process: None,
         }
     }
 
@@ -60,7 +62,6 @@ impl PgEmbed {
                 &self.pg_settings.password,
                 "-U",
                 &self.pg_settings.user,
-                "postgres",
                 "-D",
                 &self.pg_settings.database_dir,
                 &password_file_arg,
@@ -75,11 +76,11 @@ impl PgEmbed {
     ///
     /// Start postgresql database
     ///
-    /// Returns the child process `Ok(Child)` on success, otherwise returns an error.
+    /// Returns `Ok(())` on success, otherwise returns an error.
     ///
-    pub async fn start_db(&self) -> anyhow::Result<Child> {
+    pub async fn start_db(&mut self) -> anyhow::Result<()> {
         let pg_ctl_executable = format!("{}/bin/pg_ctl", &self.pg_settings.executables_dir);
-        let process = Command::new(
+        let mut process = Command::new(
             pg_ctl_executable,
         )
             .args(&[
@@ -87,21 +88,49 @@ impl PgEmbed {
             ])
             .spawn()
             .expect(
-                "failed to execute process",
+                "failed to start postgresql process",
             );
-        Ok(process)
+        self.process = Some(process);
+        Ok(())
     }
 
     ///
     /// Stop postgresql database
     ///
+    /// Returns `Ok(())` on success, otherwise returns an error.
     ///
-    pub async fn stop_db(&self) -> anyhow::Result<()> {
+    pub async fn stop_db(&mut self) -> anyhow::Result<()> {
+        let pg_ctl_executable = format!("{}/bin/pg_ctl", &self.pg_settings.executables_dir);
+        let mut process = Command::new(
+            pg_ctl_executable,
+        )
+            .args(&[
+                "stop", "-w", "-D", &self.pg_settings.database_dir,
+            ])
+            .spawn()
+            .expect(
+                "failed to stop postgresql process",
+            );
+
+        match process.try_wait() {
+            Ok(Some(status)) => {
+                println!("postgresql stopped");
+                self.process = None;
+            },
+            Ok(None) => {
+                println!("... waiting for postgresql to stop");
+                let res = process.wait();
+                println!("result: {:?}", res);
+            }
+            Err(e) => println!("postgresql not stopped properly: {}", e),
+        }
         Ok(())
     }
 
     ///
     /// Create a database password file
+    ///
+    /// Returns `Ok(())` on success, otherwise returns an error.
     ///
     pub async fn create_password_file(&self) -> anyhow::Result<()> {
         let file_path = format!(

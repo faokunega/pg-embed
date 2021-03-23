@@ -8,8 +8,9 @@ use async_std::prelude::*;
 use futures::future::BoxFuture;
 use futures::{TryFutureExt};
 use std::borrow::Borrow;
+use std::path::PathBuf;
 
-/// The operation system being used
+/// The operation systems enum
 #[derive(Debug, PartialEq)]
 pub enum OperationSystem {
     Darwin,
@@ -29,7 +30,7 @@ impl ToString for OperationSystem {
     }
 }
 
-/// The cpu architecture
+/// The cpu architectures enum
 #[derive(Debug, PartialEq)]
 pub enum Architecture {
     Amd64,
@@ -65,6 +66,7 @@ impl ToString for Architecture {
     }
 }
 
+/// Postgresql version struct (simple version wrapper)
 pub struct PostgresVersion(
     &'static str,
 );
@@ -87,10 +89,14 @@ pub const PG_V9: PostgresVersion =
 
 /// Settings that determine the postgres binary to be fetched
 pub struct FetchSettings {
+    /// The repository host
     pub host: String,
+    /// The operation system
     pub operating_system:
     OperationSystem,
+    /// The cpu architecture
     pub architecture: Architecture,
+    /// The postgresql version
     pub version: PostgresVersion,
 }
 
@@ -108,7 +114,7 @@ impl Default for FetchSettings {
 }
 
 impl FetchSettings {
-    /// get the platform string needed to determine the download path
+    /// The platform string (*needed to determine the download path*)
     fn platform(&self) -> String {
         let os = self
             .operating_system
@@ -173,59 +179,97 @@ pub async fn fetch_postgres(
     Ok(file_name)
 }
 
-pub async fn unpack_postgres(
-    file_name: &str, executables_path: &str,
-) -> anyhow::Result<()> {
-    let file_path = format!("{}/{}", executables_path, file_name);
+///
+/// Unzip the postgresql txz file
+///
+/// Returns `Ok(String)` (*the txz filename without the file extension*) on success, otherwise returns an error.
+///
+fn decompress_zip(file_path: &str, executables_path: &str) -> anyhow::Result<String> {
     let path = std::path::Path::new(
         &file_path,
     );
     let mut zip =
         archiver_rs::Zip::open(&path)?;
-    let files = zip.files()?;
-    let compressed_file_name = files
+    let file_name = zip.files()?
         .into_iter()
-        .find(|file_name| {
-            file_name.ends_with(".txz")
-        }).map(|x| x.strip_suffix(".txz").unwrap());
-    match compressed_file_name{
-        Some(compressed_file_name) => {
-            let target_name = format!("{}/{}.txz", &executables_path, &compressed_file_name);
+        .find(|name| {
+            name.ends_with(".txz")
+        }).map(|n| n.strip_suffix(".txz").unwrap().to_owned());
+    match file_name {
+        Some(file_name) => {
+            // decompress zip
+            let target_name = format!("{}/{}.txz", &executables_path, &file_name);
             let target_path =
                 std::path::Path::new(
                     &target_name,
                 );
+            let txz_name = format!("{}.txz", &file_name);
             zip.extract_single(
                 &target_path,
-                target_name.clone(),
+                txz_name,
             )?;
-            let mut xz =
-                archiver_rs::Xz::open(
-                    &target_path,
-                )?;
-            let target_name = format!("{}/{}.tar", &executables_path, &compressed_file_name);
-            let target_path =
-                std::path::Path::new(
-                    &target_name,
-                );
-            xz.decompress(target_path)?;
-
-            let mut tar =
-                archiver_rs::Tar::open(
-                    &target_path,
-                )?;
-
-            let target_path =
-                std::path::Path::new(
-                    &executables_path,
-                );
-
-            Ok(tar.extract(target_path)?)
+            Ok(file_name)
         }
-        None => {
-            Err(anyhow!("could not unpack postgres zip"))
-        }
+        None => { Err(anyhow!("not postgresql txz in zip")) }
     }
+}
+
+///
+/// Decompress the postgresql txz file
+///
+/// Returns `Ok(String)` (*the relative path to the postgresql tar file*) on success, otherwise returns an error.
+///
+fn decompress_xz(file_name: &str, executables_path: &str) -> anyhow::Result<String>{
+    let target_name = format!("{}/{}.txz", &executables_path, &file_name);
+    let target_path =
+        std::path::Path::new(
+            &target_name,
+        );
+    let mut xz =
+        archiver_rs::Xz::open(
+            &target_path,
+        )?;
+    let target_name = format!("{}/{}.tar", &executables_path, &file_name);
+    let target_path =
+        std::path::Path::new(
+            &target_name,
+        );
+    xz.decompress(target_path)?;
+    Ok(target_name)
+}
+
+///
+/// Unpack the postgresql tar file
+///
+/// Returns `Ok(())` on success, otherwise returns an error.
+///
+fn decompress_tar(target_path: &str, executables_path: &str) -> anyhow::Result<()> {
+    let target = std::path::Path::new(target_path);
+    let mut tar =
+        archiver_rs::Tar::open(
+            &target,
+        )?;
+
+    let target_path =
+        std::path::Path::new(
+            &executables_path,
+        );
+
+    Ok(tar.extract(target_path)?)
+}
+
+///
+/// Unpack the postgresql executables
+///
+/// Returns `Ok(())` on success, otherwise returns an error.
+///
+pub async fn unpack_postgres(
+    file_name: &str, executables_path: &str,
+) -> anyhow::Result<()> {
+    let file_path = format!("{}/{}", executables_path, file_name);
+    let txz_file_name = decompress_zip(&file_path, &executables_path)?;
+    let tar_file_path = decompress_xz(&txz_file_name, &executables_path)?;
+    decompress_tar(&tar_file_path, &executables_path)
 }
 
 
@@ -254,12 +298,12 @@ mod test_fetch {
     //     Ok(())
     // }
 
-    // #[test]
-    // fn unpack_postgres(
+    // #[async_std::test]
+    // async fn postgres_unpacking(
     // ) -> anyhow::Result<()> {
-    //     unpack(
-    //         "data/darwin-amd64-13.1.0-1.zip",
-    //     );
+    //     let pg_file = "data/postgres/darwin-amd64-13-1-0-1.zip";
+    //     let executables_dir = "data/postgres";
+    //     unpack_postgres(&pg_file, &executables_dir).await;
     //     Ok(())
     // }
 }
