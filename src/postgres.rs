@@ -1,8 +1,9 @@
 use futures::future::BoxFuture;
-use futures::{AsyncWriteExt, TryFutureExt};
+use futures::{TryFutureExt};
 use std::process::{Command, Child};
 use crate::fetch;
 use crate::errors::PgEmbedError;
+use tokio::io::AsyncWriteExt;
 
 ///
 /// Database settings
@@ -135,7 +136,7 @@ impl PgEmbed {
             "{}/{}",
             &self.pg_settings.executables_dir, "pwfile"
         );
-        let mut file = async_std::fs::File::create(&file_path).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
+        let mut file: tokio::fs::File = tokio::fs::File::create(&file_path).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
         let _ = file
             .write(&self.pg_settings.password.as_bytes()).map_err(|e| PgEmbedError::WriteFileError(e))
             .await?;
@@ -152,7 +153,7 @@ mod postgres_tests {
     //     start_db("data/db")
     // }
     //
-    // #[async_std::test]
+    // #[tokio::test]
     // async fn password_file_creation() -> anyhow::Result<()> {
     //     create_password_file(
     //         "data", "password",

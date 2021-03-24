@@ -3,20 +3,20 @@ use pg_embed::errors::PgEmbedError;
 
 mod common;
 
-#[async_std::test]
+#[tokio::test]
 async fn postgres_pwfile_creation() -> Result<(), PgEmbedError>{
     let pg_embed = common::setup();
     pg_embed.create_password_file().await
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn postgres_initialization() -> Result<(), PgEmbedError>{
     let pg_embed = common::setup();
     let mut child_process = pg_embed.init_db().await?;
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn postgres_server_start() -> Result<(), PgEmbedError>{
     let mut pg_embed = common::setup();
     pg_embed.start_db().await?;
@@ -24,7 +24,7 @@ async fn postgres_server_start() -> Result<(), PgEmbedError>{
     Ok(())
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn postgres_server_stop() -> Result<(), PgEmbedError>{
     let mut pg_embed = common::setup();
     let _ = pg_embed.start_db().await?;
@@ -34,15 +34,15 @@ async fn postgres_server_stop() -> Result<(), PgEmbedError>{
     Ok(())
 }
 
-// #[async_std::test]
-// async fn postgres_download() -> anyhow::Result<()>{
-//     let pg_embed = common::setup();
-//     pg_embed.aquire_postgres().await
-// }
+#[tokio::test]
+async fn postgres_download() -> Result<(), PgEmbedError>{
+    let pg_embed = common::setup();
+    pg_embed.aquire_postgres().await
+}
 
-// #[async_std::test]
+// #[tokio::test]
 // async fn postgres_unpacking(
-// ) -> anyhow::Result<()> {
+// ) -> Result<(), PgEmbedError> {
 //     let pg_file = "darwin-amd64-13.1.0-1.zip";
 //     let executables_dir = "data/postgres";
 //     fetch::unpack_postgres(&pg_file, &executables_dir).await

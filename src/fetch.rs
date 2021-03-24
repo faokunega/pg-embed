@@ -1,14 +1,13 @@
 use archiver_rs::{
     Archive, Compressed,
 };
-use async_std::fs::File;
-use async_std::path::Path;
-use async_std::prelude::*;
 use futures::future::BoxFuture;
 use futures::{TryFutureExt};
 use std::borrow::Borrow;
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use crate::errors::PgEmbedError;
+use reqwest::Response;
+use tokio::io::AsyncWriteExt;
 
 /// The operation systems enum
 #[derive(Debug, PartialEq)]
@@ -147,8 +146,8 @@ pub async fn fetch_postgres(
         &settings.version.0,
         &platform,
         &settings.version.0);
-    let mut response =
-        surf::get(download_url).map_err(|e|
+    let mut response: Response =
+        reqwest::get(download_url).map_err(|e|
             { PgEmbedError::DownloadFailure(e) })
             .await?;
 
@@ -165,14 +164,13 @@ pub async fn fetch_postgres(
     );
     let path =
         Path::new(&file_path);
-    async_std::fs::create_dir_all(
+    tokio::fs::create_dir_all(
         executable_path,
     ).map_err(|e| PgEmbedError::DirCreationError(e))
         .await?;
-    let mut file =
-        File::create(&path).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
-    let content = response
-        .body_bytes().map_err(|e| PgEmbedError::ConversionFailure(e))
+    let mut file: tokio::fs::File =
+        tokio::fs::File::create(&path).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
+    let content = response.bytes().map_err(|e| PgEmbedError::ConversionFailure(e))
         .await?;
     file.write_all(&content).map_err(|e| PgEmbedError::WriteFileError(e))
         .await?;
