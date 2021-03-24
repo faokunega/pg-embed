@@ -14,6 +14,8 @@ pub struct PgSettings {
     pub executables_dir: String,
     /// postgresql database directory
     pub database_dir: String,
+    /// postgresql port
+    pub port: i16,
     /// postgresql user name
     pub user: String,
     /// postgresql password
@@ -25,9 +27,20 @@ pub struct PgSettings {
 ///
 /// Embedded postgresql database
 ///
+/// If the PgEmbed instance is dropped / goes out of scope and postgresql is still
+/// running, the postgresql process will be killed and depending on the [PgSettings::persistent] setting,
+/// file and directories will be cleaned up.
+///
 pub struct PgEmbed {
+    /// Postgresql settings
     pub pg_settings: PgSettings,
+    /// Download settings
     pub fetch_settings: fetch::FetchSettings,
+    ///
+    /// The postgresql process
+    ///
+    /// `Some(process)` if process is running, otherwise `None`
+    ///
     pub process: Option<Child>,
 }
 
@@ -41,6 +54,9 @@ impl Drop for PgEmbed {
 }
 
 impl PgEmbed {
+    ///
+    /// Create a new PgEmbed instance
+    ///
     pub fn new(pg_settings: PgSettings, fetch_settings: fetch::FetchSettings) -> Self {
         PgEmbed {
             pg_settings,
@@ -90,25 +106,31 @@ impl PgEmbed {
     ///
     /// Initialize postgresql database
     ///
-    /// Returns the child process `Ok(Child)` on success, otherwise returns an error.
+    /// Returns `Ok(bool)` on success (false if the database directory already exists, true if it needed to be created),
+    /// otherwise returns an error.
     ///
-    pub async fn init_db(&self) -> Result<Child, PgEmbedError> {
-        let init_db_executable = format!("{}/bin/initdb", &self.pg_settings.executables_dir);
-        let password_file_arg = format!("--pwfile={}/pwfile", &self.pg_settings.executables_dir);
-        let process = Command::new(
-            init_db_executable,
-        )
-            .args(&[
-                "-A",
-                &self.pg_settings.password,
-                "-U",
-                &self.pg_settings.user,
-                "-D",
-                &self.pg_settings.database_dir,
-                &password_file_arg,
-            ])
-            .spawn().map_err(|e| PgEmbedError::PgInitFailure(e))?;
-        Ok(process)
+    pub async fn init_db(&self) -> Result<bool, PgEmbedError> {
+        let database_path = std::path::Path::new(&self.pg_settings.database_dir);
+        if !database_path.is_dir() {
+            let init_db_executable = format!("{}/bin/initdb", &self.pg_settings.executables_dir);
+            let password_file_arg = format!("--pwfile={}/pwfile", &self.pg_settings.executables_dir);
+            let process = Command::new(
+                init_db_executable,
+            )
+                .args(&[
+                    "-A",
+                    &self.pg_settings.password,
+                    "-U",
+                    &self.pg_settings.user,
+                    "-D",
+                    &self.pg_settings.database_dir,
+                    &password_file_arg,
+                ])
+                .spawn().map_err(|e| PgEmbedError::PgInitFailure(e))?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 
     ///
@@ -118,11 +140,12 @@ impl PgEmbed {
     ///
     pub async fn start_db(&mut self) -> Result<(), PgEmbedError> {
         let pg_ctl_executable = format!("{}/bin/pg_ctl", &self.pg_settings.executables_dir);
+        let port_arg = format!("-F -p {}", &self.pg_settings.port.to_string());
         let mut process = Command::new(
             pg_ctl_executable,
         )
             .args(&[
-                "start", "-w", "-D", &self.pg_settings.database_dir,
+                "-o", &port_arg, "start", "-w", "-D", &self.pg_settings.database_dir
             ])
             .spawn().map_err(|e| PgEmbedError::PgStartFailure(e))?;
         self.process = Some(process);

@@ -7,6 +7,7 @@ pub async fn setup() -> Result<PgEmbed, PgEmbedError> {
     let pg_settings = PgSettings{
         executables_dir: "data_test/postgres".to_string(),
         database_dir: "data_test/db".to_string(),
+        port: 5432,
         user: "postgres".to_string(),
         password: "password".to_string(),
         persistent: true

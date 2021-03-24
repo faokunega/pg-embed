@@ -23,10 +23,14 @@ use pg_embed::postgres::{PgEmbed, PgSettings};
 use pg_embed::fetch;
 use pg_embed::fetch::{OperationSystem, Architecture, FetchSettings, PG_V13};
 let pg_settings = PgSettings{
+    /// where to store the postgres executables
     executables_dir: "data/postgres".to_string(),
+    /// where to store the database
     database_dir: "data/db".to_string(),
+    port: 5432,
     user: "postgres".to_string(),
     password: "password".to_string(),
+    /// clean up files and directories on drop
     persistent: false
 };
 let fetch_settings = FetchSettings{
@@ -54,3 +58,12 @@ async {
 ## Notes
 
 Reliant on the great work being done by [zonkyio/embedded-postgres-binaries](https://github.com/zonkyio/embedded-postgres-binaries) in order to fetch precompiled binaries from [Maven](https://mvnrepository.com/artifact/io.zonky.test.postgres/embedded-postgres-binaries-bom).
+
+
+## License
+
+pg-embed is licensed under the MIT license. Please read the [LICENSE-MIT](https://github.com/faokunega/pg-embed/blob/master/LICENSE) file in this repository for more information.
+
+## Recent Breaking Changes
+
+pg-embed follows semantic versioning, so breaking changes should only happen upon major version bumps. The only exception to this rule is breaking changes that happen due to implementation that was deemed to be a bug, security concerns, or it can be reasonably proved to affect no code. For the full details, see [CHANGELOG.md](https://github.com/faokunega/pg-embed/blob/master/CHANGELOG.md).
