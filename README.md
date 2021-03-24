@@ -8,14 +8,15 @@ Run a Postgresql database locally on Linux, MacOS or Windows as part of another 
 
 ## Usage
 
-Import following packages:
-
-`pg-embed = "0.2"`
-
-`zip = "0.5.11"`
+- Add pg-embed & zip to your Cargo.toml
+```
+[dependencies]
+pg-embed = "0.2"
+zip = "0.5.11"
+```
 
 A postgresql instance can be created using<br/>
-`PgEmbed::new(PgSettings, FetchSettings)` <br/>
+**[PgEmbed]( https://docs.rs/pg-embed/0.2.2/pg_embed/postgres/struct.PgEmbed.html )::new([PgSettings]( https://docs.rs/pg-embed/0.2.2/pg_embed/postgres/struct.PgSettings.html ), [FetchSettings]( https://docs.rs/pg-embed/0.2.2/pg_embed/fetch/struct.FetchSettings.html ))**
 
 ## Examples
 ```rust
