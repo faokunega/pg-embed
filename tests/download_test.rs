@@ -1,30 +1,31 @@
 use pg_embed::fetch;
+use pg_embed::errors::PgEmbedError;
 
 mod common;
 
 #[async_std::test]
-async fn postgres_pwfile_creation() -> anyhow::Result<()>{
+async fn postgres_pwfile_creation() -> Result<(), PgEmbedError>{
     let pg_embed = common::setup();
     pg_embed.create_password_file().await
 }
 
 #[async_std::test]
-async fn postgres_initialization() -> anyhow::Result<()>{
+async fn postgres_initialization() -> Result<(), PgEmbedError>{
     let pg_embed = common::setup();
     let mut child_process = pg_embed.init_db().await?;
     Ok(())
 }
 
 #[async_std::test]
-async fn postgres_server_start() -> anyhow::Result<()>{
+async fn postgres_server_start() -> Result<(), PgEmbedError>{
     let mut pg_embed = common::setup();
     pg_embed.start_db().await?;
-    pg_embed.process.map(|mut p| p.kill().unwrap());
+    pg_embed.process.as_mut().map(|p| p.kill().unwrap());
     Ok(())
 }
 
 #[async_std::test]
-async fn postgres_server_stop() -> anyhow::Result<()>{
+async fn postgres_server_stop() -> Result<(), PgEmbedError>{
     let mut pg_embed = common::setup();
     let _ = pg_embed.start_db().await?;
     let duration = std::time::Duration::from_secs(10);

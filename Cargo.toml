@@ -14,7 +14,6 @@ authors = ["Franz-Aliu Okunega <aokunega@gmail.com>"]
 [dependencies]
 surf = "2.2"
 futures = "0.3"
-anyhow = "1.0"
 thiserror = "1.0"
 async-std = {version = "1.9", features =["attributes"]}
 archiver-rs = "0.5"

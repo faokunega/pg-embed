@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use archiver_rs::{
     Archive, Compressed,
 };
@@ -9,6 +8,7 @@ use futures::future::BoxFuture;
 use futures::{TryFutureExt};
 use std::borrow::Borrow;
 use std::path::PathBuf;
+use crate::errors::PgEmbedError;
 
 /// The operation systems enum
 #[derive(Debug, PartialEq)]
@@ -135,7 +135,7 @@ impl FetchSettings {
 ///
 pub async fn fetch_postgres(
     settings: &FetchSettings, executable_path: &str,
-) -> anyhow::Result<String>
+) -> Result<String, PgEmbedError>
 {
     // download binary
     let platform =
@@ -148,7 +148,8 @@ pub async fn fetch_postgres(
         &platform,
         &settings.version.0);
     let mut response =
-        surf::get(download_url).map_err(|e| anyhow!("could not load postgres binaries. status = {:?}", e))
+        surf::get(download_url).map_err(|e|
+            { PgEmbedError::DownloadFailure(e) })
             .await?;
 
     // write binary to file
@@ -166,14 +167,14 @@ pub async fn fetch_postgres(
         Path::new(&file_path);
     async_std::fs::create_dir_all(
         executable_path,
-    )
+    ).map_err(|e| PgEmbedError::DirCreationError(e))
         .await?;
     let mut file =
-        File::create(&path).await?;
+        File::create(&path).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
     let content = response
-        .body_bytes().map_err(|e| anyhow!("response byte conversion error. status = {:?}", e))
+        .body_bytes().map_err(|e| PgEmbedError::ConversionFailure(e))
         .await?;
-    file.write_all(&content)
+    file.write_all(&content).map_err(|e| PgEmbedError::WriteFileError(e))
         .await?;
 
     Ok(file_name)
@@ -184,13 +185,13 @@ pub async fn fetch_postgres(
 ///
 /// Returns `Ok(String)` (*the txz filename without the file extension*) on success, otherwise returns an error.
 ///
-fn decompress_zip(file_path: &str, executables_path: &str) -> anyhow::Result<String> {
+fn decompress_zip(file_path: &str, executables_path: &str) -> Result<String, PgEmbedError> {
     let path = std::path::Path::new(
         &file_path,
     );
     let mut zip =
-        archiver_rs::Zip::open(&path)?;
-    let file_name = zip.files()?
+        archiver_rs::Zip::open(&path).map_err(|e| PgEmbedError::ReadFileError(e))?;
+    let file_name = zip.files().map_err(|e| PgEmbedError::UnpackFailure(e))?
         .into_iter()
         .find(|name| {
             name.ends_with(".txz")
@@ -207,10 +208,10 @@ fn decompress_zip(file_path: &str, executables_path: &str) -> anyhow::Result<Str
             zip.extract_single(
                 &target_path,
                 txz_name,
-            )?;
+            ).map_err(|e| PgEmbedError::UnpackFailure(e))?;
             Ok(file_name)
         }
-        None => { Err(anyhow!("not postgresql txz in zip")) }
+        None => { Err(PgEmbedError::InvalidPgPackage("not postgresql txz in zip".to_string())) }
     }
 }
 
@@ -219,7 +220,7 @@ fn decompress_zip(file_path: &str, executables_path: &str) -> anyhow::Result<Str
 ///
 /// Returns `Ok(String)` (*the relative path to the postgresql tar file*) on success, otherwise returns an error.
 ///
-fn decompress_xz(file_name: &str, executables_path: &str) -> anyhow::Result<String>{
+fn decompress_xz(file_name: &str, executables_path: &str) -> Result<String, PgEmbedError> {
     let target_name = format!("{}/{}.txz", &executables_path, &file_name);
     let target_path =
         std::path::Path::new(
@@ -228,13 +229,13 @@ fn decompress_xz(file_name: &str, executables_path: &str) -> anyhow::Result<Stri
     let mut xz =
         archiver_rs::Xz::open(
             &target_path,
-        )?;
+        ).map_err(|e| PgEmbedError::ReadFileError(e))?;
     let target_name = format!("{}/{}.tar", &executables_path, &file_name);
     let target_path =
         std::path::Path::new(
             &target_name,
         );
-    xz.decompress(target_path)?;
+    xz.decompress(target_path).map_err(|e| PgEmbedError::UnpackFailure(e))?;
     Ok(target_name)
 }
 
@@ -243,19 +244,19 @@ fn decompress_xz(file_name: &str, executables_path: &str) -> anyhow::Result<Stri
 ///
 /// Returns `Ok(())` on success, otherwise returns an error.
 ///
-fn decompress_tar(target_path: &str, executables_path: &str) -> anyhow::Result<()> {
+fn decompress_tar(target_path: &str, executables_path: &str) -> Result<(), PgEmbedError> {
     let target = std::path::Path::new(target_path);
     let mut tar =
         archiver_rs::Tar::open(
             &target,
-        )?;
+        ).map_err(|e| PgEmbedError::ReadFileError(e))?;
 
     let target_path =
         std::path::Path::new(
             &executables_path,
         );
 
-    Ok(tar.extract(target_path)?)
+    Ok(tar.extract(target_path).map_err(|e| PgEmbedError::UnpackFailure(e))?)
 }
 
 ///
@@ -265,7 +266,7 @@ fn decompress_tar(target_path: &str, executables_path: &str) -> anyhow::Result<(
 ///
 pub async fn unpack_postgres(
     file_name: &str, executables_path: &str,
-) -> anyhow::Result<()> {
+) -> Result<(), PgEmbedError> {
     let file_path = format!("{}/{}", executables_path, file_name);
     let txz_file_name = decompress_zip(&file_path, &executables_path)?;
     let tar_file_path = decompress_xz(&txz_file_name, &executables_path)?;

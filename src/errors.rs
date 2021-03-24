@@ -7,16 +7,24 @@ use thiserror::Error;
 pub enum PgEmbedError {
     #[error("invalid postgresql binaries download url: `{0}`")]
     InvalidPgUrl(String),
-    #[error("invalid postgresql binaries package")]
-    InvalidPgPackage,
+    #[error("invalid postgresql binaries package. `{0}`")]
+    InvalidPgPackage(String),
     #[error("postgresql binaries download failure")]
-    DownloadFailure,
-    #[error("failed to unpack postgresql binaries")]
-    UnpackFailure,
-    #[error("postgresql not started due to `{0}`")]
-    PgStartFailure(String),
-    #[error("postgresql not stopped due to `{0}`")]
-    PgStopFailure(String),
-    #[error("postgresql not initialized due to `{0}`")]
-    PgInitFailure(String),
+    DownloadFailure(surf::Error),
+    #[error("could not write to file")]
+    WriteFileError(std::io::Error),
+    #[error("could not read file")]
+    ReadFileError(std::io::Error),
+    #[error("could not create directory")]
+    DirCreationError(std::io::Error),
+    #[error("conversion failure")]
+    ConversionFailure(surf::Error),
+    #[error("failed to unpack postgresql binaries`")]
+    UnpackFailure(#[from] archiver_rs::ArchiverError),
+    #[error("postgresql could not be started")]
+    PgStartFailure(std::io::Error),
+    #[error("postgresql could not be stopped")]
+    PgStopFailure(std::io::Error),
+    #[error("postgresql could not be initialized")]
+    PgInitFailure(std::io::Error),
 }

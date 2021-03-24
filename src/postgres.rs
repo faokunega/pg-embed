@@ -1,7 +1,8 @@
 use futures::future::BoxFuture;
-use futures::AsyncWriteExt;
+use futures::{AsyncWriteExt, TryFutureExt};
 use std::process::{Command, Child};
 use crate::fetch;
+use crate::errors::PgEmbedError;
 
 ///
 /// Database settings
@@ -30,9 +31,7 @@ pub struct PgEmbed {
 
 impl Drop for PgEmbed {
     fn drop(&mut self) {
-        if let Some(mut process) = &self.process {
-            process.kill();
-        }
+        self.process.as_mut().map(|p| p.kill());
     }
 }
 
@@ -48,7 +47,7 @@ impl PgEmbed {
     ///
     /// Download and unpack postgres binaries
     ///
-    pub async fn aquire_postgres(&self) -> anyhow::Result<()> {
+    pub async fn aquire_postgres(&self) -> Result<(), PgEmbedError> {
         let pg_file = fetch::fetch_postgres(&self.fetch_settings, &self.pg_settings.executables_dir).await?;
         fetch::unpack_postgres(&pg_file, &self.pg_settings.executables_dir).await
     }
@@ -58,7 +57,7 @@ impl PgEmbed {
     ///
     /// Returns the child process `Ok(Child)` on success, otherwise returns an error.
     ///
-    pub async fn init_db(&self) -> anyhow::Result<Child> {
+    pub async fn init_db(&self) -> Result<Child, PgEmbedError> {
         let init_db_executable = format!("{}/bin/initdb", &self.pg_settings.executables_dir);
         let password_file_arg = format!("--pwfile={}/pwfile", &self.pg_settings.executables_dir);
         let process = Command::new(
@@ -73,10 +72,7 @@ impl PgEmbed {
                 &self.pg_settings.database_dir,
                 &password_file_arg,
             ])
-            .spawn()
-            .expect(
-                "failed to execute process",
-            );
+            .spawn().map_err(|e| PgEmbedError::PgInitFailure(e))?;
         Ok(process)
     }
 
@@ -85,7 +81,7 @@ impl PgEmbed {
     ///
     /// Returns `Ok(())` on success, otherwise returns an error.
     ///
-    pub async fn start_db(&mut self) -> anyhow::Result<()> {
+    pub async fn start_db(&mut self) -> Result<(), PgEmbedError> {
         let pg_ctl_executable = format!("{}/bin/pg_ctl", &self.pg_settings.executables_dir);
         let mut process = Command::new(
             pg_ctl_executable,
@@ -93,10 +89,7 @@ impl PgEmbed {
             .args(&[
                 "start", "-w", "-D", &self.pg_settings.database_dir,
             ])
-            .spawn()
-            .expect(
-                "failed to start postgresql process",
-            );
+            .spawn().map_err(|e| PgEmbedError::PgStartFailure(e))?;
         self.process = Some(process);
         Ok(())
     }
@@ -106,7 +99,7 @@ impl PgEmbed {
     ///
     /// Returns `Ok(())` on success, otherwise returns an error.
     ///
-    pub async fn stop_db(&mut self) -> anyhow::Result<()> {
+    pub async fn stop_db(&mut self) -> Result<(), PgEmbedError> {
         let pg_ctl_executable = format!("{}/bin/pg_ctl", &self.pg_settings.executables_dir);
         let mut process = Command::new(
             pg_ctl_executable,
@@ -114,24 +107,22 @@ impl PgEmbed {
             .args(&[
                 "stop", "-w", "-D", &self.pg_settings.database_dir,
             ])
-            .spawn()
-            .expect(
-                "failed to stop postgresql process",
-            );
+            .spawn().map_err(|e| PgEmbedError::PgStopFailure(e))?;
 
         match process.try_wait() {
             Ok(Some(status)) => {
                 println!("postgresql stopped");
                 self.process = None;
+                Ok(())
             }
             Ok(None) => {
                 println!("... waiting for postgresql to stop");
                 let res = process.wait();
                 println!("result: {:?}", res);
+                Ok(())
             }
-            Err(e) => println!("postgresql not stopped properly: {}", e),
+            Err(e) => Err(PgEmbedError::PgStopFailure(e)),
         }
-        Ok(())
     }
 
     ///
@@ -139,14 +130,14 @@ impl PgEmbed {
     ///
     /// Returns `Ok(())` on success, otherwise returns an error.
     ///
-    pub async fn create_password_file(&self) -> anyhow::Result<()> {
+    pub async fn create_password_file(&self) -> Result<(), PgEmbedError> {
         let file_path = format!(
             "{}/{}",
             &self.pg_settings.executables_dir, "pwfile"
         );
-        let mut file = async_std::fs::File::create(&file_path).await?;
+        let mut file = async_std::fs::File::create(&file_path).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
         let _ = file
-            .write(&self.pg_settings.password.as_bytes())
+            .write(&self.pg_settings.password.as_bytes()).map_err(|e| PgEmbedError::WriteFileError(e))
             .await?;
         Ok(())
     }
