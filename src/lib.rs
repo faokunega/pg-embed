@@ -64,4 +64,5 @@
 //!
 pub mod fetch;
 pub mod postgres;
+pub mod errors;
 

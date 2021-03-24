@@ -28,10 +28,17 @@ pub struct PgEmbed {
     pub process: Option<Child>,
 }
 
-impl PgEmbed {
+impl Drop for PgEmbed {
+    fn drop(&mut self) {
+        if let Some(mut process) = &self.process {
+            process.kill();
+        }
+    }
+}
 
+impl PgEmbed {
     pub fn new(pg_settings: PgSettings, fetch_settings: fetch::FetchSettings) -> Self {
-        PgEmbed{
+        PgEmbed {
             pg_settings,
             fetch_settings,
             process: None,
@@ -116,7 +123,7 @@ impl PgEmbed {
             Ok(Some(status)) => {
                 println!("postgresql stopped");
                 self.process = None;
-            },
+            }
             Ok(None) => {
                 println!("... waiting for postgresql to stop");
                 let res = process.wait();
