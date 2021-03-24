@@ -49,6 +49,11 @@ impl PgEmbed {
         }
     }
 
+    ///
+    /// Clean up created files and directories.
+    ///
+    /// Remove created directories containing the postgresql executables, the database and the password file.
+    ///
     pub fn clean(&self) -> Result<(), PgEmbedError> {
         let bin_dir = format!("{}/bin", &self.pg_settings.executables_dir);
         let lib_dir = format!("{}/lib", &self.pg_settings.executables_dir);
@@ -59,7 +64,6 @@ impl PgEmbed {
         std::fs::remove_dir_all(lib_dir).map_err(|e| PgCleanUpFailure(e))?;
         std::fs::remove_dir_all(share_dir).map_err(|e| PgCleanUpFailure(e))?;
         std::fs::remove_file(pw_file).map_err(|e| PgCleanUpFailure(e))?;
-
         Ok(())
     }
 

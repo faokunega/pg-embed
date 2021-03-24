@@ -10,7 +10,7 @@ Run a Postgresql database locally on Linux, MacOS or Windows as part of another 
 
 Import following packages:
 
-`pg-embed = "0.1"`
+`pg-embed = "0.2"`
 
 `zip = "0.5.11"`
 
@@ -36,22 +36,18 @@ let fetch_settings = FetchSettings{
     version: PG_V13
 };
 let mut pg_emb = PgEmbed::new(pg_settings, fetch_settings);
-async {
-    /// download postgresql
-    pg_emb.aquire_postgres().await;
-    
-    /// create database password file
-    pg_emb.create_password_file().await;
-    
-    /// initialize postgresql database
-    pg_emb.init_db().await;
-    
+
+/// async block only to show that these methods need to be executed in an async context
+async { 
+    /// Download, unpack, create password file and database
+    pg_emb.setup().await;   
+
     /// start postgresql database
     pg_emb.start_db().await;
     
     /// stop postgresql database
     pg_emb.stop_db().await;
-}
+};
 ```
 
 

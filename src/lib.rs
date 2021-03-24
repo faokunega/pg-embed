@@ -12,7 +12,7 @@
 //!
 //! Import following packages:
 //!
-//! `pg-embed = "0.1"`
+//! `pg-embed = "0.2"`
 //!
 //! `zip = "0.5.11"`
 //!
@@ -42,6 +42,7 @@
 //! };
 //! let mut pg_emb = PgEmbed::new(pg_settings, fetch_settings);
 //!
+//! /// async block only to show that these methods need to be executed in an async context
 //! async {
 //!
 //!     /// Download, unpack, create password file and database
