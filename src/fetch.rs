@@ -129,7 +129,7 @@ impl FetchSettings {
 ///
 /// Fetch a postgres binary
 ///
-/// The [FetchSettings](settings) parameter determines which binary to load.
+/// The [settings](FetchSettings) parameter determines which binary to load.
 /// Returns the file name of the downloaded binary in an `Ok(String)` on success, otherwise returns an error.
 ///
 pub async fn fetch_postgres(
@@ -139,19 +139,6 @@ pub async fn fetch_postgres(
     // download binary
     let platform =
         settings.platform();
-    let download_url = format!(
-        "{}/maven2/io/zonky/test/postgres/embedded-postgres-binaries-{}/{}/embedded-postgres-binaries-{}-{}.jar",
-        &settings.host,
-        &platform,
-        &settings.version.0,
-        &platform,
-        &settings.version.0);
-    let mut response: Response =
-        reqwest::get(download_url).map_err(|e|
-            { PgEmbedError::DownloadFailure(e) })
-            .await?;
-
-    // write binary to file
     let file_name = format!(
         "{}-{}.zip",
         platform,
@@ -164,16 +151,31 @@ pub async fn fetch_postgres(
     );
     let path =
         Path::new(&file_path);
-    tokio::fs::create_dir_all(
-        executable_path,
-    ).map_err(|e| PgEmbedError::DirCreationError(e))
-        .await?;
-    let mut file: tokio::fs::File =
-        tokio::fs::File::create(&path).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
-    let content = response.bytes().map_err(|e| PgEmbedError::ConversionFailure(e))
-        .await?;
-    file.write_all(&content).map_err(|e| PgEmbedError::WriteFileError(e))
-        .await?;
+    if !path.exists() {
+        let download_url = format!(
+            "{}/maven2/io/zonky/test/postgres/embedded-postgres-binaries-{}/{}/embedded-postgres-binaries-{}-{}.jar",
+            &settings.host,
+            &platform,
+            &settings.version.0,
+            &platform,
+            &settings.version.0);
+        let mut response: Response =
+            reqwest::get(download_url).map_err(|e|
+                { PgEmbedError::DownloadFailure(e) })
+                .await?;
+
+        // write binary to file
+        tokio::fs::create_dir_all(
+            executable_path,
+        ).map_err(|e| PgEmbedError::DirCreationError(e))
+            .await?;
+        let mut file: tokio::fs::File =
+            tokio::fs::File::create(&path).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
+        let content = response.bytes().map_err(|e| PgEmbedError::ConversionFailure(e))
+            .await?;
+        file.write_all(&content).map_err(|e| PgEmbedError::WriteFileError(e))
+            .await?;
+    }
 
     Ok(file_name)
 }
@@ -181,9 +183,9 @@ pub async fn fetch_postgres(
 ///
 /// Unzip the postgresql txz file
 ///
-/// Returns `Ok(String)` (*the txz filename without the file extension*) on success, otherwise returns an error.
+/// Returns `Ok(String)` file name of the txz archive on success, otherwise returns an error.
 ///
-fn decompress_zip(file_path: &str, executables_path: &str) -> Result<String, PgEmbedError> {
+fn unzip_txz(file_path: &str, executables_path: &str) -> Result<String, PgEmbedError> {
     let path = std::path::Path::new(
         &file_path,
     );
@@ -193,21 +195,20 @@ fn decompress_zip(file_path: &str, executables_path: &str) -> Result<String, PgE
         .into_iter()
         .find(|name| {
             name.ends_with(".txz")
-        }).map(|n| n.strip_suffix(".txz").unwrap().to_owned());
+        });
     match file_name {
         Some(file_name) => {
             // decompress zip
-            let target_name = format!("{}/{}.txz", &executables_path, &file_name);
+            let target_name = format!("{}/{}", &executables_path, &file_name);
             let target_path =
                 std::path::Path::new(
                     &target_name,
                 );
-            let txz_name = format!("{}.txz", &file_name);
             zip.extract_single(
                 &target_path,
-                txz_name,
+                file_name.clone(),
             ).map_err(|e| PgEmbedError::UnpackFailure(e))?;
-            Ok(file_name)
+            Ok(target_name)
         }
         None => { Err(PgEmbedError::InvalidPgPackage("not postgresql txz in zip".to_string())) }
     }
@@ -218,17 +219,17 @@ fn decompress_zip(file_path: &str, executables_path: &str) -> Result<String, PgE
 ///
 /// Returns `Ok(String)` (*the relative path to the postgresql tar file*) on success, otherwise returns an error.
 ///
-fn decompress_xz(file_name: &str, executables_path: &str) -> Result<String, PgEmbedError> {
-    let target_name = format!("{}/{}.txz", &executables_path, &file_name);
+fn decompress_xz(file_path: &str) -> Result<String, PgEmbedError> {
     let target_path =
         std::path::Path::new(
-            &target_name,
+            &file_path,
         );
     let mut xz =
         archiver_rs::Xz::open(
             &target_path,
         ).map_err(|e| PgEmbedError::ReadFileError(e))?;
-    let target_name = format!("{}/{}.tar", &executables_path, &file_name);
+    let package_path = file_path.strip_suffix(".txz").unwrap();
+    let target_name = format!("{}.tar", package_path);
     let target_path =
         std::path::Path::new(
             &target_name,
@@ -242,8 +243,8 @@ fn decompress_xz(file_name: &str, executables_path: &str) -> Result<String, PgEm
 ///
 /// Returns `Ok(())` on success, otherwise returns an error.
 ///
-fn decompress_tar(target_path: &str, executables_path: &str) -> Result<(), PgEmbedError> {
-    let target = std::path::Path::new(target_path);
+fn decompress_tar(file_path: &str, executables_path: &str) -> Result<(), PgEmbedError> {
+    let target = std::path::Path::new(&file_path);
     let mut tar =
         archiver_rs::Tar::open(
             &target,
@@ -254,7 +255,9 @@ fn decompress_tar(target_path: &str, executables_path: &str) -> Result<(), PgEmb
             &executables_path,
         );
 
-    Ok(tar.extract(target_path).map_err(|e| PgEmbedError::UnpackFailure(e))?)
+    tar.extract(target_path).map_err(|e| PgEmbedError::UnpackFailure(e))?;
+
+    Ok(())
 }
 
 ///
@@ -266,43 +269,10 @@ pub async fn unpack_postgres(
     file_name: &str, executables_path: &str,
 ) -> Result<(), PgEmbedError> {
     let file_path = format!("{}/{}", executables_path, file_name);
-    let txz_file_name = decompress_zip(&file_path, &executables_path)?;
-    let tar_file_path = decompress_xz(&txz_file_name, &executables_path)?;
-    decompress_tar(&tar_file_path, &executables_path)
-}
-
-
-#[cfg(test)]
-mod test_fetch {
-    use super::*;
-
-    // #[async_std::test]
-    // async fn download_postgres(
-    // ) -> anyhow::Result<()> {
-    //     let settings =
-    //         FetchSettings::default();
-    //     let expected_file_name = format!(
-    //         "{}-{}.zip",
-    //         settings.platform_str(),
-    //         &settings.version.0
-    //     );
-    //     let file_name = fetch_postgres(
-    //         FetchSettings::default(),
-    //     )
-    //     .await?;
-    //     assert_eq!(
-    //         file_name,
-    //         expected_file_name
-    //     );
-    //     Ok(())
-    // }
-
-    // #[async_std::test]
-    // async fn postgres_unpacking(
-    // ) -> anyhow::Result<()> {
-    //     let pg_file = "data/postgres/darwin-amd64-13-1-0-1.zip";
-    //     let executables_dir = "data/postgres";
-    //     unpack_postgres(&pg_file, &executables_dir).await;
-    //     Ok(())
-    // }
+    let txz_file_path = unzip_txz(&file_path, &executables_path)?;
+    let tar_file_path = decompress_xz(&txz_file_path)?;
+    tokio::fs::remove_file(txz_file_path).map_err(|e| PgEmbedError::PgCleanUpFailure(e)).await?;
+    decompress_tar(&tar_file_path, &executables_path);
+    tokio::fs::remove_file(tar_file_path).map_err(|e| PgEmbedError::PgCleanUpFailure(e)).await?;
+    Ok(())
 }

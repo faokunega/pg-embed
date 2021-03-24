@@ -1,14 +1,15 @@
 use pg_embed::postgres::{PgEmbed, PgSettings};
 use pg_embed::fetch;
 use pg_embed::fetch::{OperationSystem, Architecture, FetchSettings, PG_V13};
+use pg_embed::errors::PgEmbedError;
 
-pub fn setup() -> PgEmbed {
+pub async fn setup() -> Result<PgEmbed, PgEmbedError> {
     let pg_settings = PgSettings{
-        executables_dir: "data/postgres".to_string(),
-        database_dir: "data/db".to_string(),
+        executables_dir: "data_test/postgres".to_string(),
+        database_dir: "data_test/db".to_string(),
         user: "postgres".to_string(),
         password: "password".to_string(),
-        persistent: false
+        persistent: true
     };
     let fetch_settings = FetchSettings{
         host: "https://repo1.maven.org".to_string(),
@@ -16,5 +17,7 @@ pub fn setup() -> PgEmbed {
         architecture: Architecture::Amd64,
         version: PG_V13
     };
-    PgEmbed::new(pg_settings, fetch_settings)
+    let pg = PgEmbed::new(pg_settings, fetch_settings);
+    pg.setup().await?;
+    Ok(pg)
 }

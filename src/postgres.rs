@@ -4,6 +4,7 @@ use std::process::{Command, Child};
 use crate::fetch;
 use crate::errors::PgEmbedError;
 use tokio::io::AsyncWriteExt;
+use crate::errors::PgEmbedError::PgCleanUpFailure;
 
 ///
 /// Database settings
@@ -32,7 +33,10 @@ pub struct PgEmbed {
 
 impl Drop for PgEmbed {
     fn drop(&mut self) {
-        self.process.as_mut().map(|p| p.kill());
+        &self.process.as_mut().map(|p| p.kill());
+        if !&self.pg_settings.persistent {
+            &self.clean();
+        }
     }
 }
 
@@ -43,6 +47,32 @@ impl PgEmbed {
             fetch_settings,
             process: None,
         }
+    }
+
+    pub fn clean(&self) -> Result<(), PgEmbedError> {
+        let bin_dir = format!("{}/bin", &self.pg_settings.executables_dir);
+        let lib_dir = format!("{}/lib", &self.pg_settings.executables_dir);
+        let share_dir = format!("{}/share", &self.pg_settings.executables_dir);
+        let pw_file = format!("{}/pwfile", &self.pg_settings.executables_dir);
+        std::fs::remove_dir_all(&self.pg_settings.database_dir).map_err(|e| PgCleanUpFailure(e))?;
+        std::fs::remove_dir_all(bin_dir).map_err(|e| PgCleanUpFailure(e))?;
+        std::fs::remove_dir_all(lib_dir).map_err(|e| PgCleanUpFailure(e))?;
+        std::fs::remove_dir_all(share_dir).map_err(|e| PgCleanUpFailure(e))?;
+        std::fs::remove_file(pw_file).map_err(|e| PgCleanUpFailure(e))?;
+
+        Ok(())
+    }
+
+    ///
+    /// Setup postgresql for execution
+    ///
+    /// Download, unpack, create password file and database
+    ///
+    pub async fn setup(&self) -> Result<(), PgEmbedError> {
+        &self.aquire_postgres().await?;
+        &self.create_password_file().await?;
+        &self.init_db().await?;
+        Ok(())
     }
 
     ///
@@ -142,27 +172,4 @@ impl PgEmbed {
             .await?;
         Ok(())
     }
-}
-
-#[cfg(test)]
-mod postgres_tests {
-    use super::*;
-
-    // #[test]
-    // fn postgres_start() -> anyhow::Result<()> {
-    //     start_db("data/db")
-    // }
-    //
-    // #[tokio::test]
-    // async fn password_file_creation() -> anyhow::Result<()> {
-    //     create_password_file(
-    //         "data", "password",
-    //     )
-    //         .await
-    // }
-    //
-    // #[test]
-    // fn database_initialization() -> anyhow::Result<()> {
-    //     init_db("data/db", "postgres")
-    // }
 }

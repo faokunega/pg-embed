@@ -43,14 +43,9 @@
 //! let mut pg_emb = PgEmbed::new(pg_settings, fetch_settings);
 //!
 //! async {
-//!     /// download postgresql
-//!     pg_emb.aquire_postgres().await;
 //!
-//!     /// create database password file
-//!     pg_emb.create_password_file().await;
-//!
-//!     /// initialize postgresql database
-//!     pg_emb.init_db().await;
+//!     /// Download, unpack, create password file and database
+//!     pg_emb.setup().await;
 //!
 //!     /// start postgresql database
 //!     pg_emb.start_db().await;
