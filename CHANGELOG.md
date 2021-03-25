@@ -1,5 +1,9 @@
 # v0.2.3
 ___
+### Dependencies
+- added sqlx
+
+### Fix
 - added start timeout
 
 ### Feature
