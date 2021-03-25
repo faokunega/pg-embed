@@ -1,4 +1,10 @@
+//!
+//! Library errors
+//!
+//! Errors thrown be **pg-embed**
+//!
 use thiserror::Error;
+
 
 ///
 /// PgEmbed errors
@@ -44,4 +50,7 @@ pub enum PgEmbedError {
     /// sqlx query error
     #[error("query error")]
     SqlQueryError(#[from] sqlx::Error),
+    /// migration error
+    #[error("migration error")]
+    MigrationError(#[from] sqlx::migrate::MigrateError),
 }

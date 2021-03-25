@@ -12,7 +12,8 @@ pub async fn setup() -> Result<PgEmbed, PgEmbedError> {
         user: "postgres".to_string(),
         password: "password".to_string(),
         persistent: false,
-        start_timeout: Duration::from_secs(15),
+        start_timeout: Duration::from_secs(5),
+        migration_dir: None,
     };
     let fetch_settings = FetchSettings{
         host: "https://repo1.maven.org".to_string(),

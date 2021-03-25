@@ -1,3 +1,9 @@
+//!
+//! Postgresql server
+//!
+//! Start, stop, initialize the postgresql server.
+//! Create database clusters and databases.
+//!
 use futures::future::BoxFuture;
 use futures::{TryFutureExt};
 use std::process::{Command, Child};
@@ -9,6 +15,7 @@ use sqlx::{Connection, PgConnection};
 use std::borrow::BorrowMut;
 use std::time::Duration;
 use tokio::time::sleep;
+use sqlx::migrate::Migrator;
 
 ///
 /// Database settings
@@ -28,6 +35,9 @@ pub struct PgSettings {
     pub persistent: bool,
     /// duration to wait for postgresql process to start
     pub start_timeout: Duration,
+    /// migrations folder
+    /// sql script files to execute on migrate
+    pub migration_dir: Option<String>,
 }
 
 ///
@@ -75,7 +85,7 @@ impl PgEmbed {
             pg_settings,
             fetch_settings,
             process: None,
-            db_uri
+            db_uri,
         }
     }
 
@@ -227,7 +237,24 @@ impl PgEmbed {
         Ok(())
     }
 
+    ///
+    /// The full database uri
+    ///
+    /// (*postgres://{username}:{password}@localhost:{port}/{db_name}*)
+    ///
     pub fn full_db_uri(&self, db_name: &str) -> String {
         format!("{}/{}", &self.db_uri, db_name)
+    }
+
+    ///
+    /// Run migrations
+    ///
+    pub async fn migrate(&self, db_name: &str) -> Result<(), PgEmbedError> {
+        if let Some(migration_dir) = &self.pg_settings.migration_dir {
+            let m = Migrator::new(std::path::Path::new(migration_dir)).await?;
+            let pool = PgConnection::connect(&self.full_db_uri(db_name)).await?;
+            m.run(&pool).await?;
+        }
+        Ok(())
     }
 }

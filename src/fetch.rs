@@ -1,3 +1,8 @@
+//!
+//! Fetch postgresql binaries
+//!
+//! Download and unpack postgresql binaries
+//!
 use archiver_rs::{
     Archive, Compressed,
 };
