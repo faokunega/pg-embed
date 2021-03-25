@@ -1,10 +1,10 @@
 # v0.2.3
 ___
 ### Dependencies
-- added sqlx
+    - added sqlx
 
 ### Fix
-- added start timeout
+    - added start timeout
 
 ### Feature
     - added PgEmbed::create_database(name)
