@@ -5,6 +5,10 @@ use crate::fetch;
 use crate::errors::PgEmbedError;
 use tokio::io::AsyncWriteExt;
 use crate::errors::PgEmbedError::PgCleanUpFailure;
+use sqlx::{Connection, PgConnection};
+use std::borrow::BorrowMut;
+use std::time::Duration;
+use tokio::time::sleep;
 
 ///
 /// Database settings
@@ -22,6 +26,8 @@ pub struct PgSettings {
     pub password: String,
     /// persist database
     pub persistent: bool,
+    /// duration to wait for postgresql process to start
+    pub start_timeout: Duration,
 }
 
 ///
@@ -42,13 +48,14 @@ pub struct PgEmbed {
     /// `Some(process)` if process is running, otherwise `None`
     ///
     pub process: Option<Child>,
+    pub db_uri: String,
 }
 
 impl Drop for PgEmbed {
     fn drop(&mut self) {
-        &self.process.as_mut().map(|p| p.kill());
+        let _ = &self.stop_db();
         if !&self.pg_settings.persistent {
-            &self.clean();
+            let _ = &self.clean();
         }
     }
 }
@@ -58,10 +65,17 @@ impl PgEmbed {
     /// Create a new PgEmbed instance
     ///
     pub fn new(pg_settings: PgSettings, fetch_settings: fetch::FetchSettings) -> Self {
+        let db_uri = format!(
+            "postgres://{}:{}@localhost:{}",
+            &pg_settings.user,
+            &pg_settings.password,
+            &pg_settings.port
+        );
         PgEmbed {
             pg_settings,
             fetch_settings,
             process: None,
+            db_uri
         }
     }
 
@@ -75,6 +89,7 @@ impl PgEmbed {
         let lib_dir = format!("{}/lib", &self.pg_settings.executables_dir);
         let share_dir = format!("{}/share", &self.pg_settings.executables_dir);
         let pw_file = format!("{}/pwfile", &self.pg_settings.executables_dir);
+        // not using tokio::fs async methods because clean() is called on drop
         std::fs::remove_dir_all(&self.pg_settings.database_dir).map_err(|e| PgCleanUpFailure(e))?;
         std::fs::remove_dir_all(bin_dir).map_err(|e| PgCleanUpFailure(e))?;
         std::fs::remove_dir_all(lib_dir).map_err(|e| PgCleanUpFailure(e))?;
@@ -127,6 +142,7 @@ impl PgEmbed {
                     &password_file_arg,
                 ])
                 .spawn().map_err(|e| PgEmbedError::PgInitFailure(e))?;
+            sleep(self.pg_settings.start_timeout).await;
             Ok(true)
         } else {
             Ok(false)
@@ -149,6 +165,7 @@ impl PgEmbed {
             ])
             .spawn().map_err(|e| PgEmbedError::PgStartFailure(e))?;
         self.process = Some(process);
+        sleep(self.pg_settings.start_timeout).await;
         Ok(())
     }
 
@@ -157,7 +174,7 @@ impl PgEmbed {
     ///
     /// Returns `Ok(())` on success, otherwise returns an error.
     ///
-    pub async fn stop_db(&mut self) -> Result<(), PgEmbedError> {
+    pub fn stop_db(&mut self) -> Result<(), PgEmbedError> {
         let pg_ctl_executable = format!("{}/bin/pg_ctl", &self.pg_settings.executables_dir);
         let mut process = Command::new(
             pg_ctl_executable,
@@ -198,5 +215,19 @@ impl PgEmbed {
             .write(&self.pg_settings.password.as_bytes()).map_err(|e| PgEmbedError::WriteFileError(e))
             .await?;
         Ok(())
+    }
+
+    ///
+    /// Create a database
+    ///
+    pub async fn create_database(&self, db_name: &str) -> Result<(), PgEmbedError> {
+        let sql_query = format!("CREATE DATABASE {}", db_name);
+        let mut conn = PgConnection::connect(&self.db_uri).await?;
+        let _ = sqlx::query(&sql_query).execute(&mut conn).await?;
+        Ok(())
+    }
+
+    pub fn full_db_uri(&self, db_name: &str) -> String {
+        format!("{}/{}", &self.db_uri, db_name)
     }
 }

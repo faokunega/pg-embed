@@ -32,7 +32,8 @@ let pg_settings = PgSettings{
     user: "postgres".to_string(),
     password: "password".to_string(),
     /// clean up files and directories on drop
-    persistent: false
+    persistent: false,
+    start_timeout: Duration::from_secs(15),
 };
 let fetch_settings = FetchSettings{
     host: "https://repo1.maven.org".to_string(),
@@ -50,9 +51,9 @@ async {
     /// start postgresql database
     pg_emb.start_db().await;
     
-    /// stop postgresql database
-    pg_emb.stop_db().await;
 };
+    /// stop postgresql database
+    pg_emb.stop_db();
 ```
 
 

@@ -2,6 +2,7 @@ use pg_embed::postgres::{PgEmbed, PgSettings};
 use pg_embed::fetch;
 use pg_embed::fetch::{OperationSystem, Architecture, FetchSettings, PG_V13};
 use pg_embed::errors::PgEmbedError;
+use std::time::Duration;
 
 pub async fn setup() -> Result<PgEmbed, PgEmbedError> {
     let pg_settings = PgSettings{
@@ -10,7 +11,8 @@ pub async fn setup() -> Result<PgEmbed, PgEmbedError> {
         port: 5432,
         user: "postgres".to_string(),
         password: "password".to_string(),
-        persistent: true
+        persistent: false,
+        start_timeout: Duration::from_secs(15),
     };
     let fetch_settings = FetchSettings{
         host: "https://repo1.maven.org".to_string(),

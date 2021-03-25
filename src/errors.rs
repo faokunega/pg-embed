@@ -41,4 +41,7 @@ pub enum PgEmbedError {
     /// Clean up error
     #[error("clean up error")]
     PgCleanUpFailure(std::io::Error),
+    /// sqlx query error
+    #[error("query error")]
+    SqlQueryError(#[from] sqlx::Error),
 }

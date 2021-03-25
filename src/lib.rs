@@ -12,7 +12,7 @@
 //!
 //! - Add pg-embed & zip to your Cargo.toml
 //!
-//! ```
+//! ```ignore
 //! [dependencies]
 //! pg-embed = "0.2"
 //! zip = "0.5.11"
@@ -27,6 +27,7 @@
 //! use pg_embed::postgres::{PgEmbed, PgSettings};
 //! use pg_embed::fetch;
 //! use pg_embed::fetch::{OperationSystem, Architecture, FetchSettings, PG_V13};
+//! use std::time::Duration;
 //!
 //! let pg_settings = PgSettings{
 //!     /// where to store the postgresql executables
@@ -37,7 +38,8 @@
 //!     user: "postgres".to_string(),
 //!     password: "password".to_string(),
 //!     /// if persistent is false clean up files and directories on drop, otherwise keep them
-//!     persistent: false
+//!     persistent: false,
+//!     start_timeout: Duration::from_secs(15),
 //! };
 //! let fetch_settings = FetchSettings{
 //!     host: "https://repo1.maven.org".to_string(),
@@ -56,9 +58,9 @@
 //!     /// start postgresql database
 //!     pg_emb.start_db().await;
 //!
-//!     /// stop postgresql database
-//!     pg_emb.stop_db().await;
 //! };
+//!     /// stop postgresql database
+//!     pg_emb.stop_db();
 //!
 //!
 //! ```

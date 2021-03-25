@@ -1,6 +1,6 @@
 [package]
 name = "pg-embed"
-version = "0.2.2"
+version = "0.2.3"
 license = "MIT/Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/faokunega/pg-embed"
@@ -11,9 +11,17 @@ keywords = [ "database", "postgres", "postgresql", "embedded", "server" ]
 categories = [ "database", "database-implementations", "development-tools", "asynchronous" ]
 authors = ["Franz-Aliu Okunega <aokunega@gmail.com>"]
 
+[features]
+# for conditional compilation
+#rt-async-std = []
+#rt-tokio = []
+
 [dependencies]
 reqwest = "0.11.2"
 tokio = { version = "1", features = ["full"] }
+#async-std = { version = "1.9.0", features = [ "attributes" ] }
 futures = "0.3"
 thiserror = "1.0"
 archiver-rs = "0.5"
+sqlx = { version = "0.5", features = [ "runtime-tokio-rustls", "postgres" ] }
+serial_test = "0.5"

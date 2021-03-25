@@ -1,3 +1,10 @@
+# v0.2.3
+___
+- added start timeout
+
+### Feature
+    - added PgEmbed::create_database(name)
+
 # v0.2.2
 ___
 
