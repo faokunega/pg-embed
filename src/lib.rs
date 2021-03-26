@@ -38,7 +38,7 @@
 //!
 //! # Examples
 //!
-//! ```
+//! ```ignore
 //! use pg_embed::postgres::{PgEmbed, PgSettings};
 //! use pg_embed::fetch;
 //! use pg_embed::fetch::{OperationSystem, Architecture, FetchSettings, PG_V13};
@@ -83,19 +83,19 @@
 //!
 //!     /// create a new database
 //!     /// library `feature = ["migrate"]` needs to be set
-//!     # pg.create_database("database_name").await;
+//!     pg.create_database("database_name").await;
 //!
 //!     /// drop a new database
 //!     /// library `feature = ["migrate"]` needs to be set
-//!     # pg.drop_database("database_name").await;
+//!     pg.drop_database("database_name").await;
 //!
 //!     /// check database existence
 //!     /// library `feature = ["migrate"]` needs to be set
-//!     # pg.database_exists("database_name").await;
+//!     pg.database_exists("database_name").await;
 //!
 //!     /// run migration sql scripts
 //!     /// library `feature = ["migrate"]` needs to be set
-//!     # pg.migrate("database_name").await;
+//!     pg.migrate("database_name").await;
 //! };
 //!     /// get the base postgresql uri
 //!     /// `postgres://{username}:{password}@localhost:{port}`
