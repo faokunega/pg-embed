@@ -1,5 +1,4 @@
 use pg_embed::postgres::{PgEmbed, PgSettings};
-use pg_embed::fetch;
 use pg_embed::fetch::{OperationSystem, Architecture, FetchSettings, PG_V13};
 use pg_embed::errors::PgEmbedError;
 use std::time::Duration;

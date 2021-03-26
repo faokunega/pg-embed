@@ -1,27 +1,74 @@
 [package]
 name = "pg-embed"
-version = "0.2.3"
+version = "0.3.0"
 license = "MIT/Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/faokunega/pg-embed"
 documentation = "https://docs.rs/pg-embed"
 description = "Run a Postgresql database locally on Linux, MacOS or Windows as part of another Rust application or test."
 edition = "2018"
-keywords = [ "database", "postgres", "postgresql", "embedded", "server" ]
-categories = [ "database", "database-implementations", "development-tools", "asynchronous" ]
+keywords = ["database", "postgres", "postgresql", "embedded", "server"]
+categories = ["database", "database-implementations", "development-tools", "asynchronous"]
 authors = ["Franz-Aliu Okunega <aokunega@gmail.com>"]
 
 [features]
-# for conditional compilation
-#rt-async-std = []
-#rt-tokio = []
+default = ["rt_tokio_migrate"]
+# for now only rt_tokio or rt_tokio_migrate can be used
+rt_tokio = ["tokio", "reqwest"]
+rt_tokio_migrate = ["tokio", "reqwest", "sqlx_tokio"]
+# please don't select the following features
+rt_async_std = ["async-std", "surf"]
+rt_actix = ["tokio", "reqwest"]
+rt_async_std_migrate = ["async-std", "surf", "sqlx_async_std"]
+rt_actix_migrate = ["tokio", "reqwest", "sqlx_actix"]
 
 [dependencies]
-reqwest = "0.11.2"
-tokio = { version = "1", features = ["full"] }
-#async-std = { version = "1.9.0", features = [ "attributes" ] }
+reqwest = { version = "0.11", optional = true }
+surf = {version = "2.2", optional = true}
+tokio = { version = "1", features = ["full"], optional = true }
+async-std = { version = "1.9.0", features = ["attributes"], optional = true }
 futures = "0.3"
 thiserror = "1.0"
 archiver-rs = "0.5"
-sqlx = { version = "0.5", features = [ "runtime-tokio-rustls", "postgres" ] }
+sqlx_tokio = { version = "0.5", features = ["runtime-tokio-rustls", "postgres", "migrate"], package = "sqlx", optional = true }
+sqlx_async_std = { version = "0.5", features = ["runtime-async-std-rustls", "postgres", "migrate"], package = "sqlx", optional = true }
+sqlx_actix = { version = "0.5", features = ["runtime-actix-rustls", "postgres", "migrate"], package = "sqlx", optional = true }
+zip = "0.5.11"
+
+[dev-dependencies]
 serial_test = "0.5"
+
+[[test]]
+name = "migration_tokio"
+path = "tests/migration_tokio.rs"
+required-features = ["rt_tokio_migrate"]
+
+[[test]]
+name = "migration_actix"
+path = "tests/migration_actix.rs"
+required-features = ["rt_actix_migrate"]
+
+[[test]]
+name = "migration_async_std"
+path = "tests/migration_async_std.rs"
+required-features = ["rt_async_std_migrate"]
+
+[[test]]
+name = "postgres_tokio1"
+path = "tests/postgres_tokio.rs"
+required-features = ["rt_tokio"]
+
+[[test]]
+name = "postgres_tokio2"
+path = "tests/postgres_tokio.rs"
+required-features = ["rt_tokio_migrate"]
+
+[[test]]
+name = "postgres_actix"
+path = "tests/postgres_actix.rs"
+required-features = ["rt_actix"]
+
+[[test]]
+name = "postgres_async_std"
+path = "tests/postgres_async_std.rs"
+required-features = ["rt_async_std"]

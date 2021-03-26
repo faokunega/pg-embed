@@ -9,13 +9,17 @@ use futures::{TryFutureExt};
 use std::process::{Command, Child};
 use crate::fetch;
 use crate::errors::PgEmbedError;
+#[cfg(any(feature = "rt_tokio", feature = "rt_tokio_migrate"))]
 use tokio::io::AsyncWriteExt;
 use crate::errors::PgEmbedError::PgCleanUpFailure;
-use sqlx::{Connection, PgConnection};
+#[cfg(feature = "rt_tokio_migrate")]
+use sqlx_tokio::{Connection, PgConnection, Postgres};
 use std::borrow::BorrowMut;
 use std::time::Duration;
+#[cfg(any(feature = "rt_tokio", feature = "rt_tokio_migrate"))]
 use tokio::time::sleep;
-use sqlx::migrate::Migrator;
+#[cfg(feature = "rt_tokio_migrate")]
+use sqlx_tokio::migrate::{Migrator, MigrateDatabase};
 
 ///
 /// Database settings
@@ -230,11 +234,28 @@ impl PgEmbed {
     ///
     /// Create a database
     ///
+    #[cfg(any(feature = "rt_tokio_migrate", feature = "rt_async_std_migrate", feature = "rt_actix_migrate"))]
     pub async fn create_database(&self, db_name: &str) -> Result<(), PgEmbedError> {
-        let sql_query = format!("CREATE DATABASE {}", db_name);
-        let mut conn = PgConnection::connect(&self.db_uri).await?;
-        let _ = sqlx::query(&sql_query).execute(&mut conn).await?;
+        Postgres::create_database(&self.full_db_uri(db_name)).await?;
         Ok(())
+    }
+
+    ///
+    /// Drop a database
+    ///
+    #[cfg(any(feature = "rt_tokio_migrate", feature = "rt_async_std_migrate", feature = "rt_actix_migrate"))]
+    pub async fn drop_database(&self, db_name: &str) -> Result<(), PgEmbedError> {
+        Postgres::drop_database(&self.full_db_uri(db_name)).await?;
+        Ok(())
+    }
+
+    ///
+    /// Check database existance
+    ///
+    #[cfg(any(feature = "rt_tokio_migrate", feature = "rt_async_std_migrate", feature = "rt_actix_migrate"))]
+    pub async fn database_exists(&self, db_name: &str) -> Result<bool, PgEmbedError> {
+        let result = Postgres::database_exists(&self.full_db_uri(db_name)).await?;
+        Ok(result)
     }
 
     ///
@@ -249,10 +270,11 @@ impl PgEmbed {
     ///
     /// Run migrations
     ///
+    #[cfg(any(feature = "rt_tokio_migrate", feature = "rt_async_std_migrate", feature = "rt_actix_migrate"))]
     pub async fn migrate(&self, db_name: &str) -> Result<(), PgEmbedError> {
         if let Some(migration_dir) = &self.pg_settings.migration_dir {
             let m = Migrator::new(std::path::Path::new(migration_dir)).await?;
-            let pool = PgConnection::connect(&self.full_db_uri(db_name)).await?;
+            let pool = sqlx_tokio::postgres::PgPoolOptions::new().connect(&self.full_db_uri(db_name)).await?;
             m.run(&pool).await?;
         }
         Ok(())
