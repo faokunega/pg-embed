@@ -15,9 +15,9 @@
 //!
 //! # Usage
 //!
-//! - Add pg-embed & zip to your Cargo.toml
+//! - Add pg-embed to your Cargo.toml
 //!
-//!      *Library without migration support*
+//!      *Library without sqlx migration support*
 //!
 //!      ```toml
 //!      # Cargo.toml
@@ -25,7 +25,7 @@
 //!      pg-embed = { version = "0.3", default-features = false, features = ["rt_tokio"] }
 //!      ```
 //!
-//!      *Library with migration support*
+//!      *Library with sqlx migration support*
 //!
 //!      ```toml
 //!      # Cargo.toml

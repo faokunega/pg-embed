@@ -1,3 +1,4 @@
+
  # pg-embed
 
  [![Crates.io](https://img.shields.io/crates/v/pg-embed)](http://crates.io/crates/pg-embed)
@@ -14,22 +15,22 @@
 
  # Usage
 
- - Add pg-embed & zip to your Cargo.toml
+ - Add pg-embed to your Cargo.toml
 
-      *Library without migration support*
+      *Library without sqlx migration support*
+
+      ```toml
+      # Cargo.toml
+      [dependencies]
+      pg-embed = { version = "0.3", default-features = false, features = ["rt_tokio"] }
+      ```
+
+      *Library with sqlx migration support*
 
       ```toml
       # Cargo.toml
       [dependencies]
       pg-embed = "0.3"
-      ```
-
-      *Library with migration support*
-
-      ```toml
-      # Cargo.toml
-      [dependencies]
-      pg-embed = { version = "0.3", features = ["migrate"] }
       ```
 
  A postgresql instance can be created using<br/>
@@ -82,23 +83,23 @@
 
      /// create a new database
      /// library `feature = ["migrate"]` needs to be set
-     pg.create_database("database_name").await;
+     # pg.create_database("database_name").await;
 
      /// drop a new database
      /// library `feature = ["migrate"]` needs to be set
-     pg.drop_database("database_name").await;
+     # pg.drop_database("database_name").await;
 
      /// check database existence
      /// library `feature = ["migrate"]` needs to be set
-     pg.database_exists("database_name").await;
+     # pg.database_exists("database_name").await;
 
      /// run migration sql scripts
      /// library `feature = ["migrate"]` needs to be set
-     pg.migrate("database_name").await;
+     # pg.migrate("database_name").await;
  };
      /// get the base postgresql uri
      /// `postgres://{username}:{password}@localhost:{port}`
-     let pg_uri: String = pg.db_uri;
+     let pg_uri: &str = &pg.db_uri;
 
      /// get a postgresql database uri
      /// `postgres://{username}:{password}@localhost:{port}/{specified_database_name}`
@@ -123,3 +124,4 @@
  # Notes
 
  Reliant on the great work being done by [zonkyio/embedded-postgres-binaries](https://github.com/zonkyio/embedded-postgres-binaries) in order to fetch precompiled binaries from [Maven](https://mvnrepository.com/artifact/io.zonky.test.postgres/embedded-postgres-binaries-bom).
+
