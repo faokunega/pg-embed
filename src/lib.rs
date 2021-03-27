@@ -38,7 +38,7 @@
 //!
 //! # Examples
 //!
-//! ```ignore
+//! ```
 //! use pg_embed::postgres::{PgEmbed, PgSettings};
 //! use pg_embed::fetch;
 //! use pg_embed::fetch::{OperationSystem, Architecture, FetchSettings, PG_V13};
@@ -58,7 +58,7 @@
 //!     start_timeout: Duration::from_secs(15),
 //!     /// If migration sql scripts need to be run, the directory containing those scripts can be
 //!     /// specified here with `Some(path_to_dir), otherwise `None` to run no migrations.
-//!     /// The library `feature = ["migrate"]` needs to be set to enable this functionality.
+//!     /// To enable migrations view the **Usage** section for details
 //!     migration_dir: None,
 //! };
 //!
@@ -82,19 +82,22 @@
 //!     pg.start_db().await;
 //!
 //!     /// create a new database
-//!     /// library `feature = ["migrate"]` needs to be set
+//!     /// to enable migrations view the **Usage** section for details
 //!     pg.create_database("database_name").await;
 //!
 //!     /// drop a new database
-//!     /// library `feature = ["migrate"]` needs to be set
+//!     /// to enable migrations view [Usage] for details
+//!     /// to enable migrations view the **Usage** section for details
 //!     pg.drop_database("database_name").await;
 //!
 //!     /// check database existence
-//!     /// library `feature = ["migrate"]` needs to be set
+//!     /// to enable migrations view [Usage] for details
+//!     /// to enable migrations view the **Usage** section for details
 //!     pg.database_exists("database_name").await;
 //!
 //!     /// run migration sql scripts
-//!     /// library `feature = ["migrate"]` needs to be set
+//!     /// to enable migrations view [Usage] for details
+//!     /// to enable migrations view the **Usage** section for details
 //!     pg.migrate("database_name").await;
 //! };
 //!     /// get the base postgresql uri

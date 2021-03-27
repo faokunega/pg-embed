@@ -1,3 +1,8 @@
+# v0.3.2
+___
+### Fix
+    - documentation updates
+
 # v0.3.0
 ___
 ### Feature
@@ -6,6 +11,7 @@ ___
 >   **rt_tokio** (*build with tokio async runtime and without sqlx db migration support*)
 > 
 >   **rt_tokio_migrate** (*build with tokio async runtime and sqlx db migration support*)
+
 # v0.2.3
 ___
 ### Dependencies
