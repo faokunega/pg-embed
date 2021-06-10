@@ -2,11 +2,12 @@ use pg_embed::postgres::{PgEmbed, PgSettings};
 use pg_embed::fetch::{OperationSystem, Architecture, FetchSettings, PG_V13};
 use pg_embed::errors::PgEmbedError;
 use std::time::Duration;
+use std::path::PathBuf;
 
 pub async fn setup() -> Result<PgEmbed, PgEmbedError> {
     let pg_settings = PgSettings{
-        executables_dir: "data_test/postgres".to_string(),
-        database_dir: "data_test/db".to_string(),
+        executables_dir: PathBuf::from("data_test/postgres"),
+        database_dir: PathBuf::from("data_test/db"),
         port: 5432,
         user: "postgres".to_string(),
         password: "password".to_string(),

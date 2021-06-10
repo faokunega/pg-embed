@@ -39,7 +39,7 @@
 //! # Examples
 //!
 //! ```
-//! use pg_embed::postgres::{PgEmbed, PgSettings};
+//! use pg_embed::postgres::{PgEmbed, PgSettings, PgAuthMethod};
 //! use pg_embed::fetch;
 //! use pg_embed::fetch::{OperationSystem, Architecture, FetchSettings, PG_V13};
 //! use std::time::Duration;
@@ -47,12 +47,12 @@
 //! /// Postgresql settings
 //! let pg_settings = PgSettings{
 //!     /// Where to store the postgresql executables
-//!     executables_dir: "data/postgres".to_string(),
+//!     executables_dir: PathBuf::from("data/postgres"),
 //!     /// Where to store the postgresql database
-//!     database_dir: "data/db".to_string(),
+//!     database_dir: PathBuff::from("data/db"),
 //!     port: 5432,
 //!     user: "postgres".to_string(),
-//!     password: "password".to_string(),
+//!     auth_method: PgAuthMethod::Plain("password".to_string()),
 //!     /// If persistent is false clean up files and directories on drop, otherwise keep them
 //!     persistent: false,
 //!     start_timeout: Duration::from_secs(15),

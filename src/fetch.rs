@@ -138,7 +138,7 @@ impl FetchSettings {
 /// Returns the file name of the downloaded binary in an `Ok(String)` on success, otherwise returns an error.
 ///
 pub async fn fetch_postgres(
-    settings: &FetchSettings, executable_path: &str,
+    settings: &FetchSettings, executable_path: &PathBuf,
 ) -> Result<String, PgEmbedError>
 {
     // download binary
@@ -149,14 +149,9 @@ pub async fn fetch_postgres(
         platform,
         &settings.version.0
     );
-    let file_path = format!(
-        "{}/{}",
-        &executable_path,
-        &file_name,
-    );
-    let path =
-        Path::new(&file_path);
-    if !path.exists() {
+    let mut file_path = executable_path.clone();
+    file_path.push(&file_name);
+    if !file_path.exists() {
         let download_url = format!(
             "{}/maven2/io/zonky/test/postgres/embedded-postgres-binaries-{}/{}/embedded-postgres-binaries-{}-{}.jar",
             &settings.host,
@@ -190,7 +185,7 @@ pub async fn fetch_postgres(
 ///
 /// Returns `Ok(String)` file name of the txz archive on success, otherwise returns an error.
 ///
-fn unzip_txz(file_path: &str, executables_path: &str) -> Result<String, PgEmbedError> {
+fn unzip_txz(file_path: &PathBuf, executables_path: &PathBuf) -> Result<PathBuf, PgEmbedError> {
     let path = std::path::Path::new(
         &file_path,
     );
@@ -204,18 +199,15 @@ fn unzip_txz(file_path: &str, executables_path: &str) -> Result<String, PgEmbedE
     match file_name {
         Some(file_name) => {
             // decompress zip
-            let target_name = format!("{}/{}", &executables_path, &file_name);
-            let target_path =
-                std::path::Path::new(
-                    &target_name,
-                );
+            let mut target_path = executables_path.clone();
+            target_path.push(&file_name);
             zip.extract_single(
-                &target_path,
+                &target_path.as_path(),
                 file_name.clone(),
             ).map_err(|e| PgEmbedError::UnpackFailure(e))?;
             Ok(target_name)
         }
-        None => { Err(PgEmbedError::InvalidPgPackage("not postgresql txz in zip".to_string())) }
+        None => { Err(PgEmbedError::InvalidPgPackage("no postgresql txz in zip".to_string())) }
     }
 }
 
@@ -224,22 +216,14 @@ fn unzip_txz(file_path: &str, executables_path: &str) -> Result<String, PgEmbedE
 ///
 /// Returns `Ok(String)` (*the relative path to the postgresql tar file*) on success, otherwise returns an error.
 ///
-fn decompress_xz(file_path: &str) -> Result<String, PgEmbedError> {
-    let target_path =
-        std::path::Path::new(
-            &file_path,
-        );
+fn decompress_xz(file_path: &PathBuf) -> Result<String, PgEmbedError> {
     let mut xz =
         archiver_rs::Xz::open(
-            &target_path,
+            file_path.as_path(),
         ).map_err(|e| PgEmbedError::ReadFileError(e))?;
-    let package_path = file_path.strip_suffix(".txz").unwrap();
-    let target_name = format!("{}.tar", package_path);
-    let target_path =
-        std::path::Path::new(
-            &target_name,
-        );
-    xz.decompress(target_path).map_err(|e| PgEmbedError::UnpackFailure(e))?;
+    // rename file path suffix from .txz to .tar
+    let target_path = file_path.with_extension(".tar");
+    xz.decompress(target_path.as_path()).map_err(|e| PgEmbedError::UnpackFailure(e))?;
     Ok(target_name)
 }
 
@@ -248,19 +232,13 @@ fn decompress_xz(file_path: &str) -> Result<String, PgEmbedError> {
 ///
 /// Returns `Ok(())` on success, otherwise returns an error.
 ///
-fn decompress_tar(file_path: &str, executables_path: &str) -> Result<(), PgEmbedError> {
-    let target = std::path::Path::new(&file_path);
+fn decompress_tar(file_path: &PathBuf, executables_path: &PathBuf) -> Result<(), PgEmbedError> {
     let mut tar =
         archiver_rs::Tar::open(
-            &target,
+            &file_path.as_path(),
         ).map_err(|e| PgEmbedError::ReadFileError(e))?;
 
-    let target_path =
-        std::path::Path::new(
-            &executables_path,
-        );
-
-    tar.extract(target_path).map_err(|e| PgEmbedError::UnpackFailure(e))?;
+    tar.extract(executables_path.as_path()).map_err(|e| PgEmbedError::UnpackFailure(e))?;
 
     Ok(())
 }
@@ -271,9 +249,11 @@ fn decompress_tar(file_path: &str, executables_path: &str) -> Result<(), PgEmbed
 /// Returns `Ok(())` on success, otherwise returns an error.
 ///
 pub async fn unpack_postgres(
-    file_name: &str, executables_path: &str,
+    file_name: &str, executables_path: &PathBuf,
 ) -> Result<(), PgEmbedError> {
-    let file_path = format!("{}/{}", executables_path, file_name);
+    let mut file_path = executables_path.clone();
+    file_path.push(file_name);
+    // let file_path = format!("{}/{}", executables_path, file_name);
     let txz_file_path = unzip_txz(&file_path, &executables_path)?;
     let tar_file_path = decompress_xz(&txz_file_path)?;
     tokio::fs::remove_file(txz_file_path).map_err(|e| PgEmbedError::PgCleanUpFailure(e)).await?;

@@ -14,34 +14,43 @@ use tokio::io::AsyncWriteExt;
 use crate::errors::PgEmbedError::PgCleanUpFailure;
 #[cfg(feature = "rt_tokio_migrate")]
 use sqlx_tokio::{Connection, PgConnection, Postgres};
-use std::borrow::BorrowMut;
+use std::borrow::{BorrowMut, Borrow};
 use std::time::Duration;
 #[cfg(any(feature = "rt_tokio", feature = "rt_tokio_migrate"))]
 use tokio::time::sleep;
 #[cfg(feature = "rt_tokio_migrate")]
 use sqlx_tokio::migrate::{Migrator, MigrateDatabase};
+use std::path::PathBuf;
 
 ///
 /// Database settings
 ///
 pub struct PgSettings {
     /// postgresql executables directory
-    pub executables_dir: String,
+    pub executables_dir: PathBuf,
     /// postgresql database directory
-    pub database_dir: String,
+    pub database_dir: PathBuf,
     /// postgresql port
     pub port: i16,
     /// postgresql user name
     pub user: String,
     /// postgresql password
-    pub password: String,
+    // pub password: Option<String>,
+    /// authentication
+    pub auth_method: PgAuthMethod,
     /// persist database
     pub persistent: bool,
     /// duration to wait for postgresql process to start
     pub start_timeout: Duration,
     /// migrations folder
     /// sql script files to execute on migrate
-    pub migration_dir: Option<String>,
+    pub migration_dir: Option<PathBuf>,
+}
+
+pub enum PgAuthMethod {
+    Plain(String),
+    MD5,
+    ScramSha256
 }
 
 ///
@@ -79,10 +88,21 @@ impl PgEmbed {
     /// Create a new PgEmbed instance
     ///
     pub fn new(pg_settings: PgSettings, fetch_settings: fetch::FetchSettings) -> Self {
+        let password = match &pg_settings.auth_method {
+            PgAuthMethod::Plain(pass) => {
+                pass.as_str()
+            },
+            PgAuthMethod::MD5 => {
+                ""
+            }
+            PgAuthMethod::ScramSha256 => {
+                ""
+            }
+        };
         let db_uri = format!(
             "postgres://{}:{}@localhost:{}",
             &pg_settings.user,
-            &pg_settings.password,
+            &password,
             &pg_settings.port
         );
         PgEmbed {
@@ -99,10 +119,11 @@ impl PgEmbed {
     /// Remove created directories containing the postgresql executables, the database and the password file.
     ///
     pub fn clean(&self) -> Result<(), PgEmbedError> {
-        let bin_dir = format!("{}/bin", &self.pg_settings.executables_dir);
-        let lib_dir = format!("{}/lib", &self.pg_settings.executables_dir);
-        let share_dir = format!("{}/share", &self.pg_settings.executables_dir);
-        let pw_file = format!("{}/pwfile", &self.pg_settings.executables_dir);
+        let exec_dir = self.pg_settings.executables_dir.to_str()?;
+        let bin_dir = format!("{}/bin", exec_dir);
+        let lib_dir = format!("{}/lib", exec_dir);
+        let share_dir = format!("{}/share", exec_dir);
+        let pw_file = format!("{}/pwfile", exec_dir);
         // not using tokio::fs async methods because clean() is called on drop
         std::fs::remove_dir_all(&self.pg_settings.database_dir).map_err(|e| PgCleanUpFailure(e))?;
         std::fs::remove_dir_all(bin_dir).map_err(|e| PgCleanUpFailure(e))?;
