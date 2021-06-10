@@ -205,7 +205,7 @@ fn unzip_txz(file_path: &PathBuf, executables_path: &PathBuf) -> Result<PathBuf,
                 &target_path.as_path(),
                 file_name.clone(),
             ).map_err(|e| PgEmbedError::UnpackFailure(e))?;
-            Ok(target_name)
+            Ok(target_path)
         }
         None => { Err(PgEmbedError::InvalidPgPackage("no postgresql txz in zip".to_string())) }
     }
@@ -216,14 +216,14 @@ fn unzip_txz(file_path: &PathBuf, executables_path: &PathBuf) -> Result<PathBuf,
 ///
 /// Returns `Ok(String)` (*the relative path to the postgresql tar file*) on success, otherwise returns an error.
 ///
-fn decompress_xz(file_path: &PathBuf) -> Result<String, PgEmbedError> {
+fn decompress_xz(file_path: &PathBuf) -> Result<PathBuf, PgEmbedError> {
     let mut xz =
         archiver_rs::Xz::open(
             file_path.as_path(),
         ).map_err(|e| PgEmbedError::ReadFileError(e))?;
     // rename file path suffix from .txz to .tar
     let target_path = file_path.with_extension(".tar");
-    xz.decompress(target_path.as_path()).map_err(|e| PgEmbedError::UnpackFailure(e))?;
+    xz.decompress(&target_path.as_path()).map_err(|e| PgEmbedError::UnpackFailure(e))?;
     Ok(target_name)
 }
 

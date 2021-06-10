@@ -50,7 +50,7 @@ pub struct PgSettings {
 pub enum PgAuthMethod {
     Plain(String),
     MD5,
-    ScramSha256
+    ScramSha256,
 }
 
 ///
@@ -91,7 +91,7 @@ impl PgEmbed {
         let password = match &pg_settings.auth_method {
             PgAuthMethod::Plain(pass) => {
                 pass.as_str()
-            },
+            }
             PgAuthMethod::MD5 => {
                 ""
             }
@@ -160,23 +160,26 @@ impl PgEmbed {
     /// otherwise returns an error.
     ///
     pub async fn init_db(&self) -> Result<bool, PgEmbedError> {
-        let database_path = std::path::Path::new(&self.pg_settings.database_dir);
+        let database_path = self.pg_settings.database_dir.as_path();
         if !database_path.is_dir() {
-            let init_db_executable = format!("{}/bin/initdb", &self.pg_settings.executables_dir);
-            let password_file_arg = format!("--pwfile={}/pwfile", &self.pg_settings.executables_dir);
-            let process = Command::new(
-                init_db_executable,
-            )
-                .args(&[
-                    "-A",
-                    &self.pg_settings.password,
-                    "-U",
-                    &self.pg_settings.user,
-                    "-D",
-                    &self.pg_settings.database_dir,
-                    &password_file_arg,
-                ])
-                .spawn().map_err(|e| PgEmbedError::PgInitFailure(e))?;
+            let init_db_executable = format!("{}/bin/initdb", &self.pg_settings.executables_dir.to_str()?);
+            let mut init_db_command = Command::new(init_db_executable);
+            // determine which authentication method to use
+            let process =
+                match &self.pg_settings.auth_method {
+                    PgAuthMethod::Plain(password) => {
+                        init_db_command.args(&[])
+                    }
+                    PgAuthMethod::MD5 => {
+                        let password_file_arg = format!("--pwfile={}/pwfile", &self.pg_settings.executables_dir.to_str()?);
+                        init_db_command.args(&[])
+                    }
+                    PgAuthMethod::ScramSha256 => {
+                        let password_file_arg = format!("--pwfile={}/pwfile", &self.pg_settings.executables_dir.to_str()?);
+                        init_db_command.args(&[])
+                    }
+                };
+            process.spawn().map_err(|e| PgEmbedError::PgInitFailure(e))?;
             sleep(self.pg_settings.start_timeout).await;
             Ok(true)
         } else {
@@ -190,13 +193,13 @@ impl PgEmbed {
     /// Returns `Ok(())` on success, otherwise returns an error.
     ///
     pub async fn start_db(&mut self) -> Result<(), PgEmbedError> {
-        let pg_ctl_executable = format!("{}/bin/pg_ctl", &self.pg_settings.executables_dir);
+        let pg_ctl_executable = format!("{}/bin/pg_ctl", &self.pg_settings.executables_dir.to_str().unwrap());
         let port_arg = format!("-F -p {}", &self.pg_settings.port.to_string());
         let mut process = Command::new(
             pg_ctl_executable,
         )
             .args(&[
-                "-o", &port_arg, "start", "-w", "-D", &self.pg_settings.database_dir
+                "-o", &port_arg, "start", "-w", "-D", &self.pg_settings.database_dir.to_str().unwrap()
             ])
             .spawn().map_err(|e| PgEmbedError::PgStartFailure(e))?;
         self.process = Some(process);
@@ -210,12 +213,12 @@ impl PgEmbed {
     /// Returns `Ok(())` on success, otherwise returns an error.
     ///
     pub fn stop_db(&mut self) -> Result<(), PgEmbedError> {
-        let pg_ctl_executable = format!("{}/bin/pg_ctl", &self.pg_settings.executables_dir);
+        let pg_ctl_executable = format!("{}/bin/pg_ctl", &self.pg_settings.executables_dir.to_str().unwrap());
         let mut process = Command::new(
             pg_ctl_executable,
         )
             .args(&[
-                "stop", "-w", "-D", &self.pg_settings.database_dir,
+                "stop", "-w", "-D", &self.pg_settings.database_dir.to_str().unwrap(),
             ])
             .spawn().map_err(|e| PgEmbedError::PgStopFailure(e))?;
 
@@ -241,11 +244,9 @@ impl PgEmbed {
     /// Returns `Ok(())` on success, otherwise returns an error.
     ///
     pub async fn create_password_file(&self) -> Result<(), PgEmbedError> {
-        let file_path = format!(
-            "{}/{}",
-            &self.pg_settings.executables_dir, "pwfile"
-        );
-        let mut file: tokio::fs::File = tokio::fs::File::create(&file_path).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
+        let mut file_path = self.pg_settings.executables_dir.clone();
+        file_path.push("pwfile");
+        let mut file: tokio::fs::File = tokio::fs::File::create(&file_path.as_path()).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
         let _ = file
             .write(&self.pg_settings.password.as_bytes()).map_err(|e| PgEmbedError::WriteFileError(e))
             .await?;
