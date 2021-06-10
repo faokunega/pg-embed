@@ -34,8 +34,6 @@ pub struct PgSettings {
     pub port: i16,
     /// postgresql user name
     pub user: String,
-    /// postgresql password
-    // pub password: Option<String>,
     /// authentication
     pub auth_method: PgAuthMethod,
     /// persist database
@@ -47,9 +45,20 @@ pub struct PgSettings {
     pub migration_dir: Option<PathBuf>,
 }
 
+///
+/// Postgresql password authentication method
+///
+/// Choose between plain password, md5 or scram_sha_256 authentication.
+/// The plain password is encapsulated by PgAuthMethod::Plain.
+/// Md5 and scram_sha_256 authentication are only available on postgresql versions >= 11,
+/// and are provided through the postgresql password file
+///
 pub enum PgAuthMethod {
+    // plain password encapsulated in enum as string
     Plain(String),
+    // md5 password hash, provided through password file
     MD5,
+    // scram_sha_256 password hash, provided through password file
     ScramSha256,
 }
 

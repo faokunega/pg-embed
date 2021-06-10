@@ -52,6 +52,7 @@
 //!     database_dir: PathBuff::from("data/db"),
 //!     port: 5432,
 //!     user: "postgres".to_string(),
+//!     /// The password authentication method
 //!     auth_method: PgAuthMethod::Plain("password".to_string()),
 //!     /// If persistent is false clean up files and directories on drop, otherwise keep them
 //!     persistent: false,

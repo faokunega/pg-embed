@@ -1,4 +1,4 @@
-use pg_embed::postgres::{PgEmbed, PgSettings};
+use pg_embed::postgres::{PgEmbed, PgSettings, PgAuthMethod};
 use pg_embed::fetch::{OperationSystem, Architecture, FetchSettings, PG_V13};
 use pg_embed::errors::PgEmbedError;
 use std::time::Duration;
@@ -10,7 +10,8 @@ pub async fn setup() -> Result<PgEmbed, PgEmbedError> {
         database_dir: PathBuf::from("data_test/db"),
         port: 5432,
         user: "postgres".to_string(),
-        password: "password".to_string(),
+        auth_method: PgAuthMethod::Plain("password".to_string()),
+        // password: "password".to_string(),
         persistent: false,
         start_timeout: Duration::from_secs(5),
         migration_dir: None,
