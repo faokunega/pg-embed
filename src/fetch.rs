@@ -170,7 +170,7 @@ pub async fn fetch_postgres(
         ).map_err(|e| PgEmbedError::DirCreationError(e))
             .await?;
         let mut file: tokio::fs::File =
-            tokio::fs::File::create(&path).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
+            tokio::fs::File::create(file_path.as_path()).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
         let content = response.bytes().map_err(|e| PgEmbedError::ConversionFailure(e))
             .await?;
         file.write_all(&content).map_err(|e| PgEmbedError::WriteFileError(e))
@@ -224,7 +224,7 @@ fn decompress_xz(file_path: &PathBuf) -> Result<PathBuf, PgEmbedError> {
     // rename file path suffix from .txz to .tar
     let target_path = file_path.with_extension(".tar");
     xz.decompress(&target_path.as_path()).map_err(|e| PgEmbedError::UnpackFailure(e))?;
-    Ok(target_name)
+    Ok(target_path)
 }
 
 ///

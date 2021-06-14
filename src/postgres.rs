@@ -4,7 +4,6 @@
 //! Start, stop, initialize the postgresql server.
 //! Create database clusters and databases.
 //!
-use futures::future::BoxFuture;
 use futures::{TryFutureExt};
 use std::process::{Command, Child};
 use crate::fetch;
@@ -13,8 +12,7 @@ use crate::errors::PgEmbedError;
 use tokio::io::AsyncWriteExt;
 use crate::errors::PgEmbedError::PgCleanUpFailure;
 #[cfg(feature = "rt_tokio_migrate")]
-use sqlx_tokio::{Connection, PgConnection, Postgres};
-use std::borrow::{BorrowMut, Borrow};
+use sqlx_tokio::{Postgres};
 use std::time::Duration;
 #[cfg(any(feature = "rt_tokio", feature = "rt_tokio_migrate"))]
 use tokio::time::sleep;
@@ -120,7 +118,7 @@ impl PgEmbed {
     /// Remove created directories containing the postgresql executables, the database and the password file.
     ///
     pub fn clean(&self) -> Result<(), PgEmbedError> {
-        let exec_dir = self.pg_settings.executables_dir.to_str()?;
+        let exec_dir = self.pg_settings.executables_dir.to_str().unwrap();
         let bin_dir = format!("{}/bin", exec_dir);
         let lib_dir = format!("{}/lib", exec_dir);
         let share_dir = format!("{}/share", exec_dir);
@@ -163,8 +161,8 @@ impl PgEmbed {
     pub async fn init_db(&self) -> Result<bool, PgEmbedError> {
         let database_path = self.pg_settings.database_dir.as_path();
         if !database_path.is_dir() {
-            let init_db_executable = format!("{}/bin/initdb", &self.pg_settings.executables_dir.to_str()?);
-            let password_file_arg = format!("--pwfile={}/pwfile", &self.pg_settings.executables_dir.to_str()?);
+            let init_db_executable = format!("{}/bin/initdb", &self.pg_settings.executables_dir.to_str().unwrap());
+            let password_file_arg = format!("--pwfile={}/pwfile", &self.pg_settings.executables_dir.to_str().unwrap());
             // determine which authentication method to use
             let auth_host =
                 match &self.pg_settings.auth_method {
@@ -183,8 +181,8 @@ impl PgEmbed {
                 "-U",
                 &self.pg_settings.user,
                 "-D",
-                &self.pg_settings.database_dir,
-                password_file_arg,
+                &self.pg_settings.database_dir.to_str().unwrap(),
+                &password_file_arg,
             ]).spawn().map_err(|e| PgEmbedError::PgInitFailure(e))?;
             sleep(self.pg_settings.start_timeout).await;
             Ok(true)
@@ -201,7 +199,7 @@ impl PgEmbed {
     pub async fn start_db(&mut self) -> Result<(), PgEmbedError> {
         let pg_ctl_executable = format!("{}/bin/pg_ctl", &self.pg_settings.executables_dir.to_str().unwrap());
         let port_arg = format!("-F -p {}", &self.pg_settings.port.to_string());
-        let mut process = Command::new(
+        let process = Command::new(
             pg_ctl_executable,
         )
             .args(&[
@@ -255,23 +253,23 @@ impl PgEmbed {
         let mut file: tokio::fs::File = tokio::fs::File::create(&file_path.as_path()).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
         let pass = match &self.pg_settings.auth_method {
             PgAuthMethod::Plain => {
-                self.pg_settings.password.clone()
+                self.pg_settings.password.as_bytes().to_vec()
             }
             PgAuthMethod::MD5 => {
                 let mut hasher = Md5::new();
                 hasher.update(&self.pg_settings.password.as_bytes());
                 let hash = hasher.finalize();
-                hash.to_string()
+                hash.to_vec()
             }
             PgAuthMethod::ScramSha256 => {
                 let mut hasher = Sha256::new();
                 hasher.update(&self.pg_settings.password.as_bytes());
                 let hash = hasher.finalize();
-                hash.to_string()
+                hash.to_vec()
             }
         };
         let _ = file
-            .write(pass.as_bytes()).map_err(|e| PgEmbedError::WriteFileError(e))
+            .write(pass.as_slice()).map_err(|e| PgEmbedError::WriteFileError(e))
             .await?;
         Ok(())
     }
