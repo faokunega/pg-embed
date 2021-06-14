@@ -53,6 +53,8 @@
      port: 5432,
      user: "postgres".to_string(),
      password: "password".to_string(),
+     /// password authentication method
+     auth_method: PgAuthMethod::Plain,
      /// If persistent is false clean up files and directories on drop, otherwise keep them
      persistent: false,
      start_timeout: Duration::from_secs(15),
