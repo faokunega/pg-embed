@@ -1,3 +1,7 @@
+# v0.4.3
+___
+- migrator fix
+
 # v0.4.2
 ___
 - updated documentation
