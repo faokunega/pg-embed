@@ -18,7 +18,7 @@ ___
 >       
 >       Md5 password hash
 > 
->  - **PgAuthMethod::ScramSha256**
+>   - **PgAuthMethod::ScramSha256**
 > 
 >       Sha256 password hash
 >
