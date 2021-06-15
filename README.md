@@ -22,7 +22,7 @@
       ```toml
       # Cargo.toml
       [dependencies]
-      pg-embed = { version = "0.3", default-features = false, features = ["rt_tokio"] }
+      pg-embed = { version = "0.4", default-features = false, features = ["rt_tokio"] }
       ```
 
       *Library with sqlx migration support*
@@ -30,7 +30,7 @@
       ```toml
       # Cargo.toml
       [dependencies]
-      pg-embed = "0.3"
+      pg-embed = "0.4"
       ```
 
  A postgresql instance can be created using<br/>
