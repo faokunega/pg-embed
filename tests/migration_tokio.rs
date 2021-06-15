@@ -30,6 +30,6 @@ async fn db_migration() -> Result<(), PgEmbedError> {
     assert!(pg.database_exists(&db_name).await?);
     pg.drop_database(&db_name).await?;
     assert!(!pg.database_exists(&db_name).await?);
-    // pg.migrate(&db_name).await?;
+    pg.migrate(&db_name).await?;
     Ok(())
 }

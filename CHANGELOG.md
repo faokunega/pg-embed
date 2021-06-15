@@ -1,6 +1,9 @@
+# v0.4.2
+___
+- updated documentation
+
 # v0.4.1
 ___
-### Fix
 - updated documentation
 
 # v0.4.0

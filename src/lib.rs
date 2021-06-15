@@ -49,7 +49,7 @@
 //!     /// Where to store the postgresql executables
 //!     executables_dir: PathBuf::from("data/postgres"),
 //!     /// Where to store the postgresql database
-//!     database_dir: PathBuff::from("data/db"),
+//!     database_dir: PathBuf::from("data/db"),
 //!     port: 5432,
 //!     user: "postgres".to_string(),
 //!     password: "password".to_string(),
