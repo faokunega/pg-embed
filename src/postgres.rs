@@ -298,7 +298,7 @@ impl PgEmbed {
     #[cfg(any(feature = "rt_tokio_migrate", feature = "rt_async_std_migrate", feature = "rt_actix_migrate"))]
     pub async fn migrate(&self, db_name: &str) -> Result<(), PgEmbedError> {
         if let Some(migration_dir) = &self.pg_settings.migration_dir {
-            let m = Migrator::new(std::path::Path::new(migration_dir)).await?;
+            let m = Migrator::new(migration_dir.as_path()).await?;
             let pool = sqlx_tokio::postgres::PgPoolOptions::new().connect(&self.full_db_uri(db_name)).await?;
             m.run(&pool).await?;
         }
