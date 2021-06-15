@@ -11,7 +11,7 @@ pub async fn setup() -> Result<PgEmbed, PgEmbedError> {
         port: 5432,
         user: "postgres".to_string(),
         password: "password".to_string(),
-        auth_method: PgAuthMethod::Plain,
+        auth_method: PgAuthMethod::MD5,
         persistent: false,
         start_timeout: Duration::from_secs(5),
         migration_dir: None,

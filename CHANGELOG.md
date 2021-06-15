@@ -1,3 +1,34 @@
+# v0.4.0
+___
+### Fix
+ - changed file path vars from String to PathBuf
+ - password authentication
+
+### Feature
+> - added authentication methods to **PgSettings**
+>   
+>   Setting the **auth_method** property of **PgSettings**
+>   to one of the following values will determine the authentication
+>   method:
+> 
+>   - **PgAuthMethod::Plain**
+>       
+>       Plain-Text password
+>   - **PgAuthMethod::Md5**
+>       
+>       Md5 password hash
+> 
+>  - **PgAuthMethod::ScramSha256**
+> 
+>       Sha256 password hash
+>
+> 
+
+### Breaking changes
+**PgSettings** has a new property called **auth_method** (*described above*).
+
+This property has to be set.
+
 # v0.3.2
 ___
 ### Fix

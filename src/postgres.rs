@@ -19,8 +19,6 @@ use tokio::time::sleep;
 #[cfg(feature = "rt_tokio_migrate")]
 use sqlx_tokio::migrate::{Migrator, MigrateDatabase};
 use std::path::PathBuf;
-use sha2::{Sha256, Digest};
-use md5::Md5;
 
 ///
 /// Database settings
@@ -48,17 +46,17 @@ pub struct PgSettings {
 }
 
 ///
-/// Postgresql password authentication method
+/// Postgresql authentication method
 ///
 /// Choose between plain password, md5 or scram_sha_256 authentication.
 /// Scram_sha_256 authentication is only available on postgresql versions >= 11
 ///
 pub enum PgAuthMethod {
-    // plain-text password
+    // plain-text
     Plain,
-    // md5 password hash
+    // md5
     MD5,
-    // scram_sha_256 password hash
+    // scram_sha_256
     ScramSha256,
 }
 
@@ -167,16 +165,17 @@ impl PgEmbed {
             let auth_host =
                 match &self.pg_settings.auth_method {
                     PgAuthMethod::Plain => {
-                        "--auth-host=password"
+                        "password"
                     }
                     PgAuthMethod::MD5 => {
-                        "--auth-host=md5"
+                        "md5"
                     }
                     PgAuthMethod::ScramSha256 => {
-                        "--auth-host=scram-sha-256"
+                        "scram-sha-256"
                     }
                 };
             Command::new(init_db_executable).args(&[
+                "-A",
                 auth_host,
                 "-U",
                 &self.pg_settings.user,
@@ -251,25 +250,8 @@ impl PgEmbed {
         let mut file_path = self.pg_settings.executables_dir.clone();
         file_path.push("pwfile");
         let mut file: tokio::fs::File = tokio::fs::File::create(&file_path.as_path()).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
-        let pass = match &self.pg_settings.auth_method {
-            PgAuthMethod::Plain => {
-                self.pg_settings.password.as_bytes().to_vec()
-            }
-            PgAuthMethod::MD5 => {
-                let mut hasher = Md5::new();
-                hasher.update(&self.pg_settings.password.as_bytes());
-                let hash = hasher.finalize();
-                hash.to_vec()
-            }
-            PgAuthMethod::ScramSha256 => {
-                let mut hasher = Sha256::new();
-                hasher.update(&self.pg_settings.password.as_bytes());
-                let hash = hasher.finalize();
-                hash.to_vec()
-            }
-        };
         let _ = file
-            .write(pass.as_slice()).map_err(|e| PgEmbedError::WriteFileError(e))
+            .write(&self.pg_settings.password.as_bytes()).map_err(|e| PgEmbedError::WriteFileError(e))
             .await?;
         Ok(())
     }

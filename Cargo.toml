@@ -34,8 +34,6 @@ sqlx_tokio = { version = "0.5", features = ["runtime-tokio-rustls", "postgres", 
 sqlx_async_std = { version = "0.5", features = ["runtime-async-std-rustls", "postgres", "migrate"], package = "sqlx", optional = true }
 sqlx_actix = { version = "0.5", features = ["runtime-actix-rustls", "postgres", "migrate"], package = "sqlx", optional = true }
 zip = "0.5.11"
-md-5 = "0.9.1"
-sha2 = "0.9.5"
 
 [dev-dependencies]
 serial_test = "0.5"
