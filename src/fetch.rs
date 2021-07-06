@@ -34,6 +34,19 @@ impl ToString for OperationSystem {
     }
 }
 
+impl Default for OperationSystem {
+    fn default() -> Self {
+        #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+            { OperationSystem::Darwin }
+
+        #[cfg(target_os = "linux")]
+            { OperationSystem::Linux }
+
+        #[cfg(target_os = "windows")]
+            { OperationSystem::Windows }
+    }
+}
+
 /// The cpu architectures enum
 #[derive(Debug, PartialEq)]
 pub enum Architecture {
@@ -67,6 +80,25 @@ impl ToString for Architecture {
                 "ppc64le".to_string()
             }
         }
+    }
+}
+
+impl Default for Architecture {
+    fn default() -> Self {
+        #[cfg(not(any(target_arch = "x86", target_arch = "arm", target_arch = "aarch64", target_arch = "powerpc64")))]
+            { Architecture::Amd64 }
+
+        #[cfg(target_arch = "x86")]
+            { Architecture::I386 }
+
+        #[cfg(target_arch = "arm")]
+            { Architecture::Arm32v7 }
+
+        #[cfg(target_arch = "aarch64")]
+            { Architecture::Arm64v8 }
+
+        #[cfg(target_arch = "powerpc64")]
+            { Architecture::Ppc64le }
     }
 }
 
@@ -108,10 +140,8 @@ impl Default for FetchSettings {
     fn default() -> Self {
         FetchSettings {
             host: "https://repo1.maven.org".to_string(),
-            operating_system:
-            OperationSystem::Darwin,
-            architecture:
-            Architecture::Amd64,
+            operating_system: OperationSystem::default(),
+            architecture: Architecture::default(),
             version: PG_V13,
         }
     }

@@ -17,10 +17,8 @@ pub async fn setup() -> Result<PgEmbed, PgEmbedError> {
         migration_dir: None,
     };
     let fetch_settings = FetchSettings{
-        host: "https://repo1.maven.org".to_string(),
-        operating_system: OperationSystem::Darwin,
-        architecture: Architecture::Amd64,
-        version: PG_V13
+        version: PG_V13,
+        ..Default::default()
     };
     let pg = PgEmbed::new(pg_settings, fetch_settings);
     pg.setup().await?;
