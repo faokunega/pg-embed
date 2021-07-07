@@ -107,21 +107,21 @@ pub struct PostgresVersion(
     &'static str,
 );
 
-/// Postgres version 13
+/// Latest postgres version 13
 pub const PG_V13: PostgresVersion =
-    PostgresVersion("13.1.0-1");
-/// Postgres version 12
+    PostgresVersion("13.2.0");
+/// Latest postgres version 12
 pub const PG_V12: PostgresVersion =
-    PostgresVersion("12.1.0-1");
-/// Postgres version 11
+    PostgresVersion("12.6.0");
+/// Latest pstgres version 11
 pub const PG_V11: PostgresVersion =
-    PostgresVersion("11.6.0-1");
-/// Postgres version 10
+    PostgresVersion("11.11.0");
+/// Latest postgres version 10
 pub const PG_V10: PostgresVersion =
-    PostgresVersion("10.11.0-1");
-/// Postgres version 9
+    PostgresVersion("10.16.0");
+/// Latest postgres version 9
 pub const PG_V9: PostgresVersion =
-    PostgresVersion("9.6.16-1");
+    PostgresVersion("9.6.21");
 
 /// Settings that determine the postgres binary to be fetched
 pub struct FetchSettings {

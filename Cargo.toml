@@ -35,6 +35,7 @@ sqlx_async_std = { version = "0.5", features = ["runtime-async-std-rustls", "pos
 sqlx_actix = { version = "0.5", features = ["runtime-actix-rustls", "postgres", "migrate"], package = "sqlx", optional = true }
 zip = "0.5.11"
 process_control = "3.0.1"
+log = "0.4"
 
 [dev-dependencies]
 serial_test = "0.5"

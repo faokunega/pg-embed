@@ -40,8 +40,9 @@ pub struct PgSettings {
     pub auth_method: PgAuthMethod,
     /// persist database
     pub persistent: bool,
-    /// duration to wait for postgresql process to start
-    pub start_timeout: Duration,
+    /// duration to wait before terminating process execution
+    /// pg_ctl start/stop and initdb timeout
+    pub timeout: Duration,
     /// migrations folder
     /// sql script files to execute on migrate
     pub migration_dir: Option<PathBuf>,
@@ -74,11 +75,7 @@ pub struct PgEmbed {
     pub pg_settings: PgSettings,
     /// Download settings
     pub fetch_settings: fetch::FetchSettings,
-    ///
-    /// The postgresql process
-    ///
-    /// `Some(process)` if process is running, otherwise `None`
-    ///
+    /// Database uri `postgres://{username}:{password}@localhost:{port}`
     pub db_uri: String,
 }
 
@@ -189,7 +186,7 @@ impl PgEmbed {
                 .map_err(|e| PgEmbedError::PgInitFailure(e))?;
 
             let exit_status = process
-                .with_output_timeout(self.pg_settings.start_timeout)
+                .with_output_timeout(self.pg_settings.timeout)
                 .terminating()
                 .wait()
                 .map_err(|e| PgEmbedError::PgInitFailure(e))?
@@ -222,7 +219,7 @@ impl PgEmbed {
             .spawn().map_err(|e| PgEmbedError::PgStartFailure(e))?;
 
         let exit_status = process
-            .with_output_timeout(self.pg_settings.start_timeout)
+            .with_output_timeout(self.pg_settings.timeout)
             .terminating()
             .wait()
             .map_err(|e| PgEmbedError::PgStartFailure(e))?
@@ -251,7 +248,7 @@ impl PgEmbed {
             .spawn().map_err(|e| PgEmbedError::PgStopFailure(e))?;
 
         let exit_status = process
-            .with_output_timeout(self.pg_settings.start_timeout)
+            .with_output_timeout(self.pg_settings.timeout)
             .terminating()
             .wait()
             .map_err(|e| PgEmbedError::PgStopFailure(e))?

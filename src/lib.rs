@@ -39,37 +39,39 @@
 //! # Examples
 //!
 //! ```
+//!
 //! use pg_embed::postgres::{PgEmbed, PgSettings, PgAuthMethod};
 //! use pg_embed::fetch;
-//! use pg_embed::fetch::{OperationSystem, Architecture, FetchSettings, PG_V13};
+//! use pg_embed::fetch::{FetchSettings, PG_V13};
 //! use std::time::Duration;
+//! use std::path::PathBuf;
 //!
 //! /// Postgresql settings
 //! let pg_settings = PgSettings{
-//!     /// Where to store the postgresql executables
-//!     executables_dir: PathBuf::from("data/postgres"),
-//!     /// Where to store the postgresql database
-//!     database_dir: PathBuf::from("data/db"),
-//!     port: 5432,
-//!     user: "postgres".to_string(),
-//!     password: "password".to_string(),
-//!     /// authentication method
-//!     auth_method: PgAuthMethod::Plain,
-//!     /// If persistent is false clean up files and directories on drop, otherwise keep them
-//!     persistent: false,
-//!     start_timeout: Duration::from_secs(15),
-//!     /// If migration sql scripts need to be run, the directory containing those scripts can be
-//!     /// specified here with `Some(path_to_dir), otherwise `None` to run no migrations.
-//!     /// To enable migrations view the **Usage** section for details
-//!     migration_dir: None,
+//! // Where to store the postgresql executables
+//! executables_dir: PathBuf::from("data/postgres"),
+//! // Where to store the postgresql database
+//! database_dir: PathBuf::from("data/db"),
+//! port: 5432,
+//! user: "postgres".to_string(),
+//! password: "password".to_string(),
+//! // authentication method
+//! auth_method: PgAuthMethod::Plain,
+//! // If persistent is false clean up files and directories on drop, otherwise keep them
+//! persistent: false,
+//! // duration to wait before terminating process execution
+//! // pg_ctl start/stop and initdb timeout
+//! timeout: Duration::from_secs(15),
+//! // If migration sql scripts need to be run, the directory containing those scripts can be
+//! // specified here with `Some(PathBuf(path_to_dir)), otherwise `None` to run no migrations.
+//! // To enable migrations view the **Usage** section for details
+//! migration_dir: None,
 //! };
 //!
 //! /// Postgresql binaries download settings
 //! let fetch_settings = FetchSettings{
-//!     host: "https://repo1.maven.org".to_string(),
-//!     operating_system: OperationSystem::Darwin,
-//!     architecture: Architecture::Amd64,
-//!     version: PG_V13
+//! version: PG_V13,
+//! ..Default::default()
 //! };
 //!
 //! /// Create a new instance
@@ -77,41 +79,38 @@
 //!
 //! /// async block only to show that these methods need to be executed in an async context
 //! async {
-//!     /// Download, unpack, create password file and database cluster
-//!     pg.setup().await;
+//! // Download, unpack, create password file and database cluster
+//! pg.setup().await;
 //!
-//!     /// start postgresql database
-//!     pg.start_db().await;
+//! // start postgresql database
+//! pg.start_db().await;
 //!
-//!     /// create a new database
-//!     /// to enable migrations view the **Usage** section for details
-//!     pg.create_database("database_name").await;
+//! // create a new database
+//! // to enable migrations view the [Usage] section for details
+//! pg.create_database("database_name").await;
 //!
-//!     /// drop a new database
-//!     /// to enable migrations view [Usage] for details
-//!     /// to enable migrations view the **Usage** section for details
-//!     pg.drop_database("database_name").await;
+//! // drop a new database
+//! // to enable migrations view [Usage] for details
+//! pg.drop_database("database_name").await;
 //!
-//!     /// check database existence
-//!     /// to enable migrations view [Usage] for details
-//!     /// to enable migrations view the **Usage** section for details
-//!     pg.database_exists("database_name").await;
+//! // check database existence
+//! // to enable migrations view [Usage] for details
+//! pg.database_exists("database_name").await;
 //!
-//!     /// run migration sql scripts
-//!     /// to enable migrations view [Usage] for details
-//!     /// to enable migrations view the **Usage** section for details
-//!     pg.migrate("database_name").await;
+//! // run migration sql scripts
+//! // to enable migrations view [Usage] for details
+//! pg.migrate("database_name").await;
 //! };
-//!     /// get the base postgresql uri
-//!     /// `postgres://{username}:{password}@localhost:{port}`
-//!     let pg_uri: &str = &pg.db_uri;
+//! // get the base postgresql uri
+//! // `postgres://{username}:{password}@localhost:{port}`
+//! let pg_uri: &str = &pg.db_uri;
 //!
-//!     /// get a postgresql database uri
-//!     /// `postgres://{username}:{password}@localhost:{port}/{specified_database_name}`
-//!     let pg_db_uri: String = pg.full_db_uri("database_name");
+//! // get a postgresql database uri
+//! // `postgres://{username}:{password}@localhost:{port}/{specified_database_name}`
+//! let pg_db_uri: String = pg.full_db_uri("database_name");
 //!
-//!     /// stop postgresql database
-//!     pg.stop_db();
+//! // stop postgresql database
+//! pg.stop_db();
 //!
 //!
 //! ```
