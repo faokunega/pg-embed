@@ -5,7 +5,7 @@
 //! Create database clusters and databases.
 //!
 use futures::{TryFutureExt};
-use std::process::{Command, Child};
+use std::process::Command;
 use crate::fetch;
 use crate::errors::PgEmbedError;
 #[cfg(any(feature = "rt_tokio", feature = "rt_tokio_migrate"))]
@@ -14,11 +14,13 @@ use crate::errors::PgEmbedError::PgCleanUpFailure;
 #[cfg(feature = "rt_tokio_migrate")]
 use sqlx_tokio::{Postgres};
 use std::time::Duration;
-#[cfg(any(feature = "rt_tokio", feature = "rt_tokio_migrate"))]
-use tokio::time::sleep;
 #[cfg(feature = "rt_tokio_migrate")]
 use sqlx_tokio::migrate::{Migrator, MigrateDatabase};
 use std::path::PathBuf;
+use process_control::ChildExt;
+use process_control::Timeout;
+use std::io;
+use io::{Error, ErrorKind};
 
 ///
 /// Database settings
@@ -77,7 +79,6 @@ pub struct PgEmbed {
     ///
     /// `Some(process)` if process is running, otherwise `None`
     ///
-    pub process: Option<Child>,
     pub db_uri: String,
 }
 
@@ -105,7 +106,6 @@ impl PgEmbed {
         PgEmbed {
             pg_settings,
             fetch_settings,
-            process: None,
             db_uri,
         }
     }
@@ -174,17 +174,32 @@ impl PgEmbed {
                         "scram-sha-256"
                     }
                 };
-            Command::new(init_db_executable).args(&[
-                "-A",
-                auth_host,
-                "-U",
-                &self.pg_settings.user,
-                "-D",
-                &self.pg_settings.database_dir.to_str().unwrap(),
-                &password_file_arg,
-            ]).spawn().map_err(|e| PgEmbedError::PgInitFailure(e))?;
-            sleep(self.pg_settings.start_timeout).await;
-            Ok(true)
+
+            let process = Command::new(init_db_executable)
+                .args(&[
+                    "-A",
+                    auth_host,
+                    "-U",
+                    &self.pg_settings.user,
+                    "-D",
+                    &self.pg_settings.database_dir.to_str().unwrap(),
+                    &password_file_arg,
+                ])
+                .spawn()
+                .map_err(|e| PgEmbedError::PgInitFailure(e))?;
+
+            let exit_status = process
+                .with_output_timeout(self.pg_settings.start_timeout)
+                .terminating()
+                .wait()
+                .map_err(|e| PgEmbedError::PgInitFailure(e))?
+                .ok_or_else(|| PgEmbedError::PgInitFailure(Error::new(ErrorKind::TimedOut, "Postgresql initialization command timed out")))?;
+
+            if exit_status.status.success() {
+                Ok(true)
+            } else {
+                Err(PgEmbedError::PgInitFailure(Error::new(ErrorKind::Other, format!("Postgresql initialization command failed with {}", exit_status.status))))
+            }
         } else {
             Ok(false)
         }
@@ -205,9 +220,19 @@ impl PgEmbed {
                 "-o", &port_arg, "start", "-w", "-D", &self.pg_settings.database_dir.to_str().unwrap()
             ])
             .spawn().map_err(|e| PgEmbedError::PgStartFailure(e))?;
-        self.process = Some(process);
-        sleep(self.pg_settings.start_timeout).await;
-        Ok(())
+
+        let exit_status = process
+            .with_output_timeout(self.pg_settings.start_timeout)
+            .terminating()
+            .wait()
+            .map_err(|e| PgEmbedError::PgStartFailure(e))?
+            .ok_or_else(|| PgEmbedError::PgStartFailure(Error::new(ErrorKind::TimedOut, "Postgresql startup command timed out")))?;
+
+        if exit_status.status.success() {
+            Ok(())
+        } else {
+            Err(PgEmbedError::PgStartFailure(Error::new(ErrorKind::Other, format!("Postgresql startup command failed with {}", exit_status.status))))
+        }
     }
 
     ///
@@ -225,19 +250,17 @@ impl PgEmbed {
             ])
             .spawn().map_err(|e| PgEmbedError::PgStopFailure(e))?;
 
-        match process.try_wait() {
-            Ok(Some(status)) => {
-                println!("postgresql stopped");
-                self.process = None;
-                Ok(())
-            }
-            Ok(None) => {
-                println!("... waiting for postgresql to stop");
-                let res = process.wait();
-                println!("result: {:?}", res);
-                Ok(())
-            }
-            Err(e) => Err(PgEmbedError::PgStopFailure(e)),
+        let exit_status = process
+            .with_output_timeout(self.pg_settings.start_timeout)
+            .terminating()
+            .wait()
+            .map_err(|e| PgEmbedError::PgStopFailure(e))?
+            .ok_or_else(|| PgEmbedError::PgStopFailure(Error::new(ErrorKind::TimedOut, "Postgresql stop command timed out")))?;
+
+        if exit_status.status.success() {
+            Ok(())
+        } else {
+            Err(PgEmbedError::PgStopFailure(Error::new(ErrorKind::Other, format!("Postgresql stop command failed with {}", exit_status.status))))
         }
     }
 
