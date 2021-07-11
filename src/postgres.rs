@@ -5,12 +5,24 @@
 //! Create database clusters and databases.
 //!
 use futures::{TryFutureExt};
-use std::process::Command;
-use crate::fetch;
-use crate::errors::PgEmbedError;
+use std::process::{Command, Stdio};
+use crate::pg_fetch;
+// these cfg feature settings for PgEmbedError are really convoluted, but getting syntax errors otherwise
+#[cfg(not(any(feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix", feature = "rt_actix_migrate")))]
+use crate::errors::errors_tokio::PgEmbedError;
+#[cfg(not(any(feature = "rt_tokio", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix", feature = "rt_actix_migrate")))]
+use crate::errors::errors_tokio_migrate::PgEmbedError;
+#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std_migrate", feature = "rt_actix", feature = "rt_actix_migrate")))]
+use crate::errors::errors_async_std::PgEmbedError;
+#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_actix", feature = "rt_actix_migrate")))]
+use crate::errors::errors_async_std_migrate::PgEmbedError;
+#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix_migrate")))]
+use crate::errors::errors_actix::PgEmbedError;
+#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix")))]
+use crate::errors::errors_actix_migrate::PgEmbedError;
+use crate::errors::errors_common::PgEmbedError;
 #[cfg(any(feature = "rt_tokio", feature = "rt_tokio_migrate"))]
 use tokio::io::AsyncWriteExt;
-use crate::errors::PgEmbedError::PgCleanUpFailure;
 #[cfg(feature = "rt_tokio_migrate")]
 use sqlx_tokio::{Postgres};
 use std::time::Duration;
@@ -21,6 +33,8 @@ use process_control::ChildExt;
 use process_control::Timeout;
 use std::io;
 use io::{Error, ErrorKind};
+use log::{info, error};
+use crate::pg_access::PgAccess;
 
 ///
 /// Database settings
@@ -55,12 +69,35 @@ pub struct PgSettings {
 /// Scram_sha_256 authentication is only available on postgresql versions >= 11
 ///
 pub enum PgAuthMethod {
-    // plain-text
+    /// plain-text
     Plain,
-    // md5
+    /// md5
     MD5,
-    // scram_sha_256
+    /// scram_sha_256
     ScramSha256,
+}
+
+///
+/// Postgresql server status
+///
+#[derive(PartialEq)]
+pub enum PgServerStatus {
+    /// Postgres uninitialized
+    Uninitialized,
+    /// Initialization process running
+    Initializing,
+    /// Initialization process finished
+    Initialized,
+    /// Postgres server process starting
+    Starting,
+    /// Postgres server process started
+    Started,
+    /// Postgres server process stopping
+    Stopping,
+    /// Postgres server process stopped
+    Stopped,
+    /// Postgres failure
+    Failure,
 }
 
 ///
@@ -74,16 +111,22 @@ pub struct PgEmbed {
     /// Postgresql settings
     pub pg_settings: PgSettings,
     /// Download settings
-    pub fetch_settings: fetch::FetchSettings,
+    pub fetch_settings: pg_fetch::PgFetchSettings,
     /// Database uri `postgres://{username}:{password}@localhost:{port}`
     pub db_uri: String,
+    /// Postgres server status
+    pub server_status: PgServerStatus,
+    /// Postgres files access
+    pub pg_access: PgAccess,
 }
 
 impl Drop for PgEmbed {
     fn drop(&mut self) {
-        let _ = &self.stop_db();
+        if self.server_status != PgServerStatus::Stopped {
+            let _ = &self.stop_db();
+        }
         if !&self.pg_settings.persistent {
-            let _ = &self.clean();
+            let _ = &self.pg_access.clean();
         }
     }
 }
@@ -92,7 +135,7 @@ impl PgEmbed {
     ///
     /// Create a new PgEmbed instance
     ///
-    pub fn new(pg_settings: PgSettings, fetch_settings: fetch::FetchSettings) -> Self {
+    pub async fn new(pg_settings: PgSettings, fetch_settings: pg_fetch::PgFetchSettings) -> Result<Self, PgEmbedError> {
         let password: &str = &pg_settings.password;
         let db_uri = format!(
             "postgres://{}:{}@localhost:{}",
@@ -100,31 +143,16 @@ impl PgEmbed {
             &password,
             &pg_settings.port
         );
-        PgEmbed {
-            pg_settings,
-            fetch_settings,
-            db_uri,
-        }
-    }
-
-    ///
-    /// Clean up created files and directories.
-    ///
-    /// Remove created directories containing the postgresql executables, the database and the password file.
-    ///
-    pub fn clean(&self) -> Result<(), PgEmbedError> {
-        let exec_dir = self.pg_settings.executables_dir.to_str().unwrap();
-        let bin_dir = format!("{}/bin", exec_dir);
-        let lib_dir = format!("{}/lib", exec_dir);
-        let share_dir = format!("{}/share", exec_dir);
-        let pw_file = format!("{}/pwfile", exec_dir);
-        // not using tokio::fs async methods because clean() is called on drop
-        std::fs::remove_dir_all(&self.pg_settings.database_dir).map_err(|e| PgCleanUpFailure(e))?;
-        std::fs::remove_dir_all(bin_dir).map_err(|e| PgCleanUpFailure(e))?;
-        std::fs::remove_dir_all(lib_dir).map_err(|e| PgCleanUpFailure(e))?;
-        std::fs::remove_dir_all(share_dir).map_err(|e| PgCleanUpFailure(e))?;
-        std::fs::remove_file(pw_file).map_err(|e| PgCleanUpFailure(e))?;
-        Ok(())
+        let pg_access = PgAccess::new(&fetch_settings, &pg_settings.database_dir).await?;
+        Ok(
+            PgEmbed {
+                pg_settings,
+                fetch_settings,
+                db_uri,
+                server_status: PgServerStatus::Uninitialized,
+                pg_access,
+            }
+        )
     }
 
     ///
@@ -132,9 +160,9 @@ impl PgEmbed {
     ///
     /// Download, unpack, create password file and database
     ///
-    pub async fn setup(&self) -> Result<(), PgEmbedError> {
+    pub async fn setup(&mut self) -> Result<(), PgEmbedError> {
         &self.aquire_postgres().await?;
-        &self.create_password_file().await?;
+        self.pg_access.create_password_file(self.pg_settings.password.as_bytes()).await?;
         &self.init_db().await?;
         Ok(())
     }
@@ -143,8 +171,8 @@ impl PgEmbed {
     /// Download and unpack postgres binaries
     ///
     pub async fn aquire_postgres(&self) -> Result<(), PgEmbedError> {
-        let pg_file = fetch::fetch_postgres(&self.fetch_settings, &self.pg_settings.executables_dir).await?;
-        fetch::unpack_postgres(&pg_file, &self.pg_settings.executables_dir).await
+        let pg_file = pg_fetch::fetch_postgres(&self.fetch_settings, &self.pg_settings.executables_dir).await?;
+        pg_fetch::unpack_postgres(&pg_file, &self.pg_settings.executables_dir).await
     }
 
     ///
@@ -153,11 +181,12 @@ impl PgEmbed {
     /// Returns `Ok(bool)` on success (false if the database directory already exists, true if it needed to be created),
     /// otherwise returns an error.
     ///
-    pub async fn init_db(&self) -> Result<bool, PgEmbedError> {
+    pub async fn init_db(&mut self) -> Result<bool, PgEmbedError> {
+        self.server_status = PgServerStatus::Initializing;
         let database_path = self.pg_settings.database_dir.as_path();
         if !database_path.is_dir() {
-            let init_db_executable = format!("{}/bin/initdb", &self.pg_settings.executables_dir.to_str().unwrap());
-            let password_file_arg = format!("--pwfile={}/pwfile", &self.pg_settings.executables_dir.to_str().unwrap());
+            let init_db_executable = self.pg_access.init_db_exe.to_str().unwrap();
+            let password_file_arg = format!("--pwfile={}/pwfile", &self.pg_access.cache_dir.to_str().unwrap());
             // determine which authentication method to use
             let auth_host =
                 match &self.pg_settings.auth_method {
@@ -172,7 +201,7 @@ impl PgEmbed {
                     }
                 };
 
-            let process = Command::new(init_db_executable)
+            let mut process = Command::new(init_db_executable)
                 .args(&[
                     "-A",
                     auth_host,
@@ -182,22 +211,30 @@ impl PgEmbed {
                     &self.pg_settings.database_dir.to_str().unwrap(),
                     &password_file_arg,
                 ])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
                 .spawn()
                 .map_err(|e| PgEmbedError::PgInitFailure(e))?;
 
             let exit_status = process
                 .with_output_timeout(self.pg_settings.timeout)
+                .strict_errors()
                 .terminating()
                 .wait()
                 .map_err(|e| PgEmbedError::PgInitFailure(e))?
                 .ok_or_else(|| PgEmbedError::PgInitFailure(Error::new(ErrorKind::TimedOut, "Postgresql initialization command timed out")))?;
 
             if exit_status.status.success() {
+                info!(String::from_utf8(exit_status.stdout).unwrap());
+                self.server_status = PgServerStatus::Initialized;
                 Ok(true)
             } else {
+                error!(String::from_utf8(exit_status.stderr).unwrap());
+                self.server_status = PgServerStatus::Failure;
                 Err(PgEmbedError::PgInitFailure(Error::new(ErrorKind::Other, format!("Postgresql initialization command failed with {}", exit_status.status))))
             }
         } else {
+            self.server_status = PgServerStatus::Failure;
             Ok(false)
         }
     }
@@ -208,26 +245,37 @@ impl PgEmbed {
     /// Returns `Ok(())` on success, otherwise returns an error.
     ///
     pub async fn start_db(&mut self) -> Result<(), PgEmbedError> {
-        let pg_ctl_executable = format!("{}/bin/pg_ctl", &self.pg_settings.executables_dir.to_str().unwrap());
+        self.server_status = PgServerStatus::Starting;
+        let pg_ctl_executable = self.pg_access.pg_ctl_exe.to_str().unwrap();
         let port_arg = format!("-F -p {}", &self.pg_settings.port.to_string());
-        let process = Command::new(
+        // TODO: somehow the standard output of this command can not be piped, if piped it does not terminate. Find a solution!
+        let mut process = Command::new(
             pg_ctl_executable,
         )
             .args(&[
                 "-o", &port_arg, "start", "-w", "-D", &self.pg_settings.database_dir.to_str().unwrap()
             ])
-            .spawn().map_err(|e| PgEmbedError::PgStartFailure(e))?;
+            // .stdin(Stdio::null())
+            // .stdout(Stdio::piped())
+            // .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| PgEmbedError::PgStartFailure(e))?;
 
         let exit_status = process
             .with_output_timeout(self.pg_settings.timeout)
+            .strict_errors()
             .terminating()
             .wait()
             .map_err(|e| PgEmbedError::PgStartFailure(e))?
             .ok_or_else(|| PgEmbedError::PgStartFailure(Error::new(ErrorKind::TimedOut, "Postgresql startup command timed out")))?;
 
         if exit_status.status.success() {
+            // println!("##### start_db success #####\n{}", String::from_utf8(exit_status.stdout).unwrap());
+            self.server_status = PgServerStatus::Started;
             Ok(())
         } else {
+            // println!("##### start_db error #####\n{}", String::from_utf8(exit_status.stderr).unwrap());
+            self.server_status = PgServerStatus::Failure;
             Err(PgEmbedError::PgStartFailure(Error::new(ErrorKind::Other, format!("Postgresql startup command failed with {}", exit_status.status))))
         }
     }
@@ -238,42 +286,37 @@ impl PgEmbed {
     /// Returns `Ok(())` on success, otherwise returns an error.
     ///
     pub fn stop_db(&mut self) -> Result<(), PgEmbedError> {
-        let pg_ctl_executable = format!("{}/bin/pg_ctl", &self.pg_settings.executables_dir.to_str().unwrap());
+        self.server_status = PgServerStatus::Stopping;
+        let pg_ctl_executable = self.pg_access.pg_ctl_exe.as_str().unwrap();
         let mut process = Command::new(
             pg_ctl_executable,
         )
             .args(&[
                 "stop", "-w", "-D", &self.pg_settings.database_dir.to_str().unwrap(),
             ])
-            .spawn().map_err(|e| PgEmbedError::PgStopFailure(e))?;
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| PgEmbedError::PgStopFailure(e))?;
+
 
         let exit_status = process
             .with_output_timeout(self.pg_settings.timeout)
+            .strict_errors()
             .terminating()
             .wait()
             .map_err(|e| PgEmbedError::PgStopFailure(e))?
             .ok_or_else(|| PgEmbedError::PgStopFailure(Error::new(ErrorKind::TimedOut, "Postgresql stop command timed out")))?;
 
         if exit_status.status.success() {
+            info!(String::from_utf8(exit_status.stdout).unwrap());
+            self.server_status = PgServerStatus::Stopped;
             Ok(())
         } else {
+            error!(String::from_utf8(exit_status.stderr).unwrap());
+            self.server_status = PgServerStatus::Failure;
             Err(PgEmbedError::PgStopFailure(Error::new(ErrorKind::Other, format!("Postgresql stop command failed with {}", exit_status.status))))
         }
-    }
-
-    ///
-    /// Create a database password file
-    ///
-    /// Returns `Ok(())` on success, otherwise returns an error.
-    ///
-    pub async fn create_password_file(&self) -> Result<(), PgEmbedError> {
-        let mut file_path = self.pg_settings.executables_dir.clone();
-        file_path.push("pwfile");
-        let mut file: tokio::fs::File = tokio::fs::File::create(&file_path.as_path()).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
-        let _ = file
-            .write(&self.pg_settings.password.as_bytes()).map_err(|e| PgEmbedError::WriteFileError(e))
-            .await?;
-        Ok(())
     }
 
     ///

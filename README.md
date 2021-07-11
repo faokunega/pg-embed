@@ -33,14 +33,14 @@ will be available soon.
      ```
 
 A postgresql instance can be created using<br/>
-**[PgEmbed]( postgres::PgEmbed )::new([PgSettings]( postgres::PgSettings ), [FetchSettings]( fetch::FetchSettings ))**
+**[PgEmbed]( postgres::PgEmbed )::new([PgSettings]( postgres::PgSettings ), [PgFetchSettings]( fetch::PgFetchSettings ))**
 
 # Examples
 
  ```rust
  use pg_embed::postgres::{PgEmbed, PgSettings, PgAuthMethod};
  use pg_embed::fetch;
- use pg_embed::fetch::{FetchSettings, PG_V13};
+ use pg_embed::fetch::{PgFetchSettings, PG_V13};
  use std::time::Duration;
  use std::path::PathBuf;
 
@@ -67,7 +67,7 @@ A postgresql instance can be created using<br/>
  };
 
  /// Postgresql binaries download settings
- let fetch_settings = FetchSettings{
+ let fetch_settings = PgFetchSettings{
         version: PG_V13,
         ..Default::default()
  };

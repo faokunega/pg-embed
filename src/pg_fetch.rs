@@ -10,7 +10,20 @@ use futures::future::BoxFuture;
 use futures::{TryFutureExt};
 use std::borrow::Borrow;
 use std::path::{PathBuf, Path};
-use crate::errors::PgEmbedError;
+// these cfg feature settings for PgEmbedError are really convoluted, but getting syntax errors otherwise
+#[cfg(not(any(feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix", feature = "rt_actix_migrate")))]
+use crate::errors::errors_tokio::PgEmbedError;
+#[cfg(not(any(feature = "rt_tokio", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix", feature = "rt_actix_migrate")))]
+use crate::errors::errors_tokio_migrate::PgEmbedError;
+#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std_migrate", feature = "rt_actix", feature = "rt_actix_migrate")))]
+use crate::errors::errors_async_std::PgEmbedError;
+#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_actix", feature = "rt_actix_migrate")))]
+use crate::errors::errors_async_std_migrate::PgEmbedError;
+#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix_migrate")))]
+use crate::errors::errors_actix::PgEmbedError;
+#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix")))]
+use crate::errors::errors_actix_migrate::PgEmbedError;
+use crate::errors::errors_common::PgEmbedError;
 use reqwest::Response;
 use tokio::io::AsyncWriteExt;
 
@@ -104,7 +117,7 @@ impl Default for Architecture {
 
 /// Postgresql version struct (simple version wrapper)
 pub struct PostgresVersion(
-    &'static str,
+    pub &'static str,
 );
 
 /// Latest postgres version 13
@@ -124,7 +137,7 @@ pub const PG_V9: PostgresVersion =
     PostgresVersion("9.6.21");
 
 /// Settings that determine the postgres binary to be fetched
-pub struct FetchSettings {
+pub struct PgFetchSettings {
     /// The repository host
     pub host: String,
     /// The operation system
@@ -136,9 +149,9 @@ pub struct FetchSettings {
     pub version: PostgresVersion,
 }
 
-impl Default for FetchSettings {
+impl Default for PgFetchSettings {
     fn default() -> Self {
-        FetchSettings {
+        PgFetchSettings {
             host: "https://repo1.maven.org".to_string(),
             operating_system: OperationSystem::default(),
             architecture: Architecture::default(),
@@ -147,9 +160,9 @@ impl Default for FetchSettings {
     }
 }
 
-impl FetchSettings {
+impl PgFetchSettings {
     /// The platform string (*needed to determine the download path*)
-    fn platform(&self) -> String {
+    pub fn platform(&self) -> String {
         let os = self
             .operating_system
             .to_string();
@@ -164,11 +177,11 @@ impl FetchSettings {
 ///
 /// Fetch a postgres binary
 ///
-/// The [settings](FetchSettings) parameter determines which binary to load.
+/// The [settings](PgFetchSettings) parameter determines which binary to load.
 /// Returns the file name of the downloaded binary in an `Ok(String)` on success, otherwise returns an error.
 ///
 pub async fn fetch_postgres(
-    settings: &FetchSettings, executable_path: &PathBuf,
+    settings: &PgFetchSettings, executable_path: &PathBuf,
 ) -> Result<String, PgEmbedError>
 {
     // download binary
@@ -283,7 +296,6 @@ pub async fn unpack_postgres(
 ) -> Result<(), PgEmbedError> {
     let mut file_path = executables_path.clone();
     file_path.push(file_name);
-    // let file_path = format!("{}/{}", executables_path, file_name);
     let txz_file_path = unzip_txz(&file_path, &executables_path)?;
     let tar_file_path = decompress_xz(&txz_file_path)?;
     tokio::fs::remove_file(txz_file_path).map_err(|e| PgEmbedError::PgCleanUpFailure(e)).await?;

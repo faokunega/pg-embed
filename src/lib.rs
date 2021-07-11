@@ -34,15 +34,15 @@
 //!      ```
 //!
 //! A postgresql instance can be created using<br/>
-//! **[PgEmbed]( postgres::PgEmbed )::new([PgSettings]( postgres::PgSettings ), [FetchSettings]( fetch::FetchSettings ))**
+//! **[PgEmbed]( postgres::PgEmbed )::new([PgSettings]( postgres::PgSettings ), [PgFetchSettings]( fetch::PgFetchSettings ))**
 //!
 //! # Examples
 //!
 //! ```
 //!
 //! use pg_embed::postgres::{PgEmbed, PgSettings, PgAuthMethod};
-//! use pg_embed::fetch;
-//! use pg_embed::fetch::{FetchSettings, PG_V13};
+//! use pg_embed::pg_fetch;
+//! use pg_embed::pg_fetch::{PgFetchSettings, PG_V13};
 //! use std::time::Duration;
 //! use std::path::PathBuf;
 //!
@@ -69,7 +69,7 @@
 //! };
 //!
 //! /// Postgresql binaries download settings
-//! let fetch_settings = FetchSettings{
+//! let fetch_settings = PgFetchSettings{
 //! version: PG_V13,
 //! ..Default::default()
 //! };
@@ -155,7 +155,9 @@ compile_error!(
      'rt_async_std', 'rt_async_std_migrate'] can be enabled"
 );
 
-pub mod fetch;
+extern crate dirs;
+pub mod pg_fetch;
 pub mod postgres;
 pub mod errors;
+pub mod pg_access;
 

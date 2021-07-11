@@ -1,4 +1,4 @@
-use pg_embed::errors::PgEmbedError;
+use pg_embed::errors::errors_tokio_migrate::PgEmbedError;
 use serial_test::serial;
 
 mod common;
