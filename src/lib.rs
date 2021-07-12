@@ -48,8 +48,6 @@
 //!
 //! /// Postgresql settings
 //! let pg_settings = PgSettings{
-//! // Where to store the postgresql executables
-//! executables_dir: PathBuf::from("data/postgres"),
 //! // Where to store the postgresql database
 //! database_dir: PathBuf::from("data/db"),
 //! port: 5432,
@@ -74,11 +72,12 @@
 //! ..Default::default()
 //! };
 //!
-//! /// Create a new instance
-//! let mut pg = PgEmbed::new(pg_settings, fetch_settings);
 //!
 //! /// async block only to show that these methods need to be executed in an async context
 //! async {
+//! // Create a new instance
+//! let mut pg = PgEmbed::new(pg_settings, fetch_settings).await?;
+//!
 //! // Download, unpack, create password file and database cluster
 //! pg.setup().await;
 //!

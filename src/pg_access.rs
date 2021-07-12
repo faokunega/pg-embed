@@ -4,26 +4,15 @@
 
 use std::path::PathBuf;
 
-// these cfg feature settings for PgEmbedError are really convoluted, but getting syntax errors otherwise
-#[cfg(not(any(feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix", feature = "rt_actix_migrate")))]
-use crate::errors::errors_tokio::PgEmbedError;
-#[cfg(not(any(feature = "rt_tokio", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix", feature = "rt_actix_migrate")))]
-use crate::errors::errors_tokio_migrate::PgEmbedError;
-#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std_migrate", feature = "rt_actix", feature = "rt_actix_migrate")))]
-use crate::errors::errors_async_std::PgEmbedError;
-#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_actix", feature = "rt_actix_migrate")))]
-use crate::errors::errors_async_std_migrate::PgEmbedError;
-#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix_migrate")))]
-use crate::errors::errors_actix::PgEmbedError;
-#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix")))]
-use crate::errors::errors_actix_migrate::PgEmbedError;
 use crate::errors::errors_common::PgEmbedError;
 use futures::TryFutureExt;
 use tokio::io::AsyncWriteExt;
-use crate::postgres::PgSettings;
+use crate::postgres::{PgSettings, PgAuthMethod};
 use crate::pg_fetch::{PgFetchSettings, OperationSystem};
 use std::io::{Error, ErrorKind};
 use crate::errors::errors_common::PgEmbedError::PgPurgeFailure;
+use std::cell::Cell;
+use tokio::process::Command;
 
 ///
 /// Access to pg_ctl, initdb, database directory and cache directory
@@ -63,7 +52,7 @@ impl PgAccess {
         let file_name = format!(
             "{}-{}.zip",
             platform,
-            &settings.version.0
+            &fetch_settings.version.0
         );
         zip_file_path.push(file_name);
 
@@ -104,13 +93,14 @@ impl PgAccess {
     }
 
     ///
-    /// Write to postgresql cache directory
+    /// Write pg binaries zip to postgresql cache directory
     ///
-    async fn write(&self, bytes: &[u8]) -> Result<(), PgEmbedError> {
+    pub async fn write_pg_zip(&self, bytes: &[u8]) -> Result<(), PgEmbedError> {
         let mut file: tokio::fs::File =
             tokio::fs::File::create(&self.zip_file_path.as_path()).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
         file.write_all(&bytes).map_err(|e| PgEmbedError::WriteFileError(e))
-            .await?
+            .await?;
+        Ok(())
     }
 
     ///
@@ -131,7 +121,7 @@ impl PgAccess {
     /// Remove cached postgresql executables
     ///
     async fn purge(&self) -> Result<(), PgEmbedError> {
-        tokio::fs::remove_dir_all(self.cache_dir.as_path()).map_err(|e| PgPurgeFailure(e)).await?
+        tokio::fs::remove_dir_all(self.cache_dir.as_path()).map_err(|e| PgEmbedError::PgPurgeFailure(e)).await
     }
 
     ///
@@ -145,5 +135,69 @@ impl PgAccess {
             .write(password).map_err(|e| PgEmbedError::WriteFileError(e))
             .await?;
         Ok(())
+    }
+
+    pub fn init_db_command(&self, database_dir: &PathBuf, user: &str, auth_method: &PgAuthMethod) -> Box<Cell<Command>> {
+        let init_db_executable = self.init_db_exe.to_str().unwrap();
+        let password_file_arg = format!("--pwfile={}", self.zip_file_path.to_str().unwrap());
+        let auth_host =
+            match auth_method {
+                PgAuthMethod::Plain => {
+                    "password"
+                }
+                PgAuthMethod::MD5 => {
+                    "md5"
+                }
+                PgAuthMethod::ScramSha256 => {
+                    "scram-sha-256"
+                }
+            };
+
+        let mut command =
+            Box::new(
+                Cell::new(
+                    tokio::process::Command::new(init_db_executable)
+                )
+            );
+        command.get_mut()
+            .args(&[
+                "-A",
+                auth_host,
+                "-U",
+                user,
+                "-D",
+                database_dir.to_str().unwrap(),
+                &password_file_arg,
+            ]);
+        command
+    }
+    pub fn start_db_command(&self, database_dir: &PathBuf, port: i16) -> Box<Cell<Command>> {
+        let pg_ctl_executable = self.pg_ctl_exe.to_str().unwrap();
+        let port_arg = format!("-F -p {}", port.to_string());
+        let mut command =
+            Box::new(
+                Cell::new(
+                    tokio::process::Command::new(pg_ctl_executable)
+                )
+            );
+        command.get_mut()
+            .args(&[
+                "-o", &port_arg, "start", "-w", "-D", database_dir.to_str().unwrap()
+            ]);
+        command
+    }
+    pub fn stop_db_command(&self, database_dir: &PathBuf) -> Box<Cell<Command>> {
+        let pg_ctl_executable = self.pg_ctl_exe.to_str().unwrap();
+        let mut command =
+            Box::new(
+                Cell::new(
+                    tokio::process::Command::new(pg_ctl_executable)
+                )
+            );
+        command.get_mut()
+            .args(&[
+                "stop", "-w", "-D", database_dir.to_str().unwrap(),
+            ]);
+        command
     }
 }

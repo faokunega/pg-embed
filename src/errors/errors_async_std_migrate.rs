@@ -4,7 +4,7 @@ use thiserror::Error;
 /// PgEmbed errors when using feature = "rt_async_std_migrate"
 ///
 #[derive(Error, Debug)]
-pub enum PgEmbedError {
+pub enum PgEmbedErrorExt {
     /// Postgresql binaries download failure
     #[error("postgresql binaries download failure")]
     DownloadFailure(surf::Error),
