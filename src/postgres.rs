@@ -234,8 +234,8 @@ impl PgEmbed {
         // TODO: somehow the standard output of this command can not be piped, if piped it does not terminate. Find a solution!
         let mut process = start_db_command.get_mut()
             // .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            // .stdout(Stdio::piped())
+            // .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| PgEmbedError::PgStartFailure(e))?;
 
@@ -307,19 +307,22 @@ impl PgEmbed {
     /// Handle process logging
     ///
     pub async fn handle_process_io(&self, process: &mut Child) -> Result<(), PgEmbedError> {
-        let stdout = process.stdout.take().expect("child process did not have a handle to stdout");
-        let stderr = process.stderr.take().expect("child process did not have a handle to stderr");
+        if let Some(stdout) = process.stdout.take() {
+            let mut reader_out = BufReader::new(stdout).lines();
 
-        let mut reader_out = BufReader::new(stdout).lines();
-        let mut reader_err = BufReader::new(stderr).lines();
-
-        while let Some(line) = reader_out.next_line().map_err(|e| PgEmbedError::PgBufferReadError(e)).await? {
-            println!("#### out :::  {}", line);
+            while let Some(line) = reader_out.next_line().map_err(|e| PgEmbedError::PgBufferReadError(e)).await? {
+                info!("{}", line);
+            }
         }
 
-        while let Some(line) = reader_err.next_line().map_err(|e| PgEmbedError::PgBufferReadError(e)).await? {
-            println!("#### err :::  {}", line);
+        if let Some(stderr) = process.stderr.take() {
+            let mut reader_err = BufReader::new(stderr).lines();
+
+            while let Some(line) = reader_err.next_line().map_err(|e| PgEmbedError::PgBufferReadError(e)).await? {
+                error!("{}", line);
+            }
         }
+
         Ok(())
     }
 
