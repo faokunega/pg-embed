@@ -5,8 +5,11 @@ use std::path::PathBuf;
 use std::io::{Error, ErrorKind};
 use pg_embed::pg_errors::PgEmbedError;
 use pg_embed::pg_enums::PgAuthMethod;
+use env_logger::Env;
 
 pub async fn setup() -> Result<PgEmbed, PgEmbedError> {
+    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+    let _ = env_logger::builder().is_test(true).try_init();
     let pg_settings = PgSettings{
         database_dir: PathBuf::from("data_test/db"),
         port: 5432,

@@ -40,6 +40,7 @@ bytes = "1.0"
 
 [dev-dependencies]
 serial_test = "0.5"
+env_logger = "0.8"
 
 [[test]]
 name = "migration_tokio"
