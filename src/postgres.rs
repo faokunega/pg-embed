@@ -114,9 +114,13 @@ impl PgEmbed {
     /// Download, unpack, create password file and database
     ///
     pub async fn setup(&mut self) -> Result<(), PgEmbedError> {
-        &self.aquire_postgres().await?;
+        if !self.pg_access.pg_executables_cached().await? {
+            &self.aquire_postgres().await?;
+        }
         self.pg_access.create_password_file(self.pg_settings.password.as_bytes()).await?;
-        &self.init_db().await?;
+        if !self.pg_access.database_dir_exists().await? {
+            &self.init_db().await?;
+        }
         Ok(())
     }
 
@@ -128,6 +132,7 @@ impl PgEmbed {
         self.pg_access.write_pg_zip(&pg_bin_data).await?;
         pg_unpack::unpack_postgres(&self.pg_access.zip_file_path, &self.pg_access.cache_dir).await
     }
+
 
     // pub async fn database_dir_status(&self) -> Result<>
 

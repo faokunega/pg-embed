@@ -94,6 +94,28 @@ impl PgAccess {
     }
 
     ///
+    /// Check if postgresql executables are already cached
+    ///
+    pub async fn pg_executables_cached(&self) -> Result<bool, PgEmbedError> {
+        if let Ok(_) = tokio::fs::File::open(self.init_db_exe.as_path()).await {
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    ///
+    /// Check if database directory exists
+    ///
+    pub async fn database_dir_exists(&self) -> Result<bool, PgEmbedError> {
+        if let Ok(_) = tokio::fs::File::open(self.database_dir.as_path()).await {
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    ///
     /// Write pg binaries zip to postgresql cache directory
     ///
     pub async fn write_pg_zip(&self, bytes: &[u8]) -> Result<(), PgEmbedError> {
@@ -172,6 +194,7 @@ impl PgAccess {
             ]);
         command
     }
+
     pub fn start_db_command(&self, database_dir: &PathBuf, port: i16) -> Box<Cell<Command>> {
         let pg_ctl_executable = self.pg_ctl_exe.to_str().unwrap();
         let port_arg = format!("-F -p {}", port.to_string());
@@ -187,6 +210,7 @@ impl PgAccess {
             ]);
         command
     }
+
     pub fn stop_db_command(&self, database_dir: &PathBuf) -> Box<Cell<Command>> {
         let pg_ctl_executable = self.pg_ctl_exe.to_str().unwrap();
         let mut command =
