@@ -13,8 +13,8 @@ pub async fn setup() -> Result<PgEmbed, PgEmbedError> {
         user: "postgres".to_string(),
         password: "password".to_string(),
         auth_method: PgAuthMethod::MD5,
-        persistent: true,
-        timeout: Duration::from_secs(15),
+        persistent: false,
+        timeout: Duration::from_secs(60),
         migration_dir: None,
     };
     let fetch_settings = PgFetchSettings {

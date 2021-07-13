@@ -4,7 +4,7 @@
 //! Start, stop, initialize the postgresql server.
 //! Create database clusters and databases.
 //!
-use futures::{TryFutureExt};
+use futures::{TryFutureExt, StreamExt};
 use std::process::{Command, Stdio, ExitStatus};
 use crate::{pg_fetch, pg_unpack};
 use crate::pg_errors::PgEmbedError;
@@ -17,9 +17,10 @@ use sqlx_tokio::postgres::PgPoolOptions;
 use std::time::Duration;
 #[cfg(feature = "rt_tokio_migrate")]
 use sqlx_tokio::migrate::{Migrator, MigrateDatabase};
+use tokio::task;
 use tokio::time::timeout;
 use std::path::PathBuf;
-use std::io;
+use std::{io, thread};
 use io::{Error, ErrorKind};
 use log::{info, error};
 use crate::pg_access::PgAccess;
@@ -150,7 +151,7 @@ impl PgEmbed {
             .spawn()
             .map_err(|e| PgEmbedError::PgInitFailure(e))?;
 
-        self.handle_process_io(&mut process).await;
+        self.handle_process_io(&mut process).await?;
 
         self.timeout_pg_process(&mut process, PgProcessType::InitDb).await
     }
@@ -164,16 +165,15 @@ impl PgEmbed {
         self.server_status = PgServerStatus::Starting;
         let mut start_db_command = self.pg_access.start_db_command(&self.pg_settings.database_dir, self.pg_settings.port);
 
-        // TODO: somehow the standard output of this command can not be piped,
-        // TODO: if piped it does not exit even though "-w" pg_ctl's wait argument is set, which should send an exit status. Find a solution!
-        let mut process = start_db_command.get_mut()
+        let mut process = start_db_command
+            .get_mut()
             // .stdin(Stdio::null())
-            // .stdout(Stdio::piped())
-            // .stderr(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| PgEmbedError::PgStartFailure(e))?;
 
-        self.handle_process_io(&mut process).await;
+        self.handle_process_io(&mut process).await?;
 
         self.timeout_pg_process(&mut process, PgProcessType::StartDb).await
     }
@@ -192,7 +192,7 @@ impl PgEmbed {
             .spawn()
             .map_err(|e| PgEmbedError::PgStopFailure(e))?;
 
-        self.handle_process_io(&mut process).await;
+        self.handle_process_io(&mut process).await?;
 
         self.timeout_pg_process(&mut process, PgProcessType::StopDb).await
     }
@@ -241,20 +241,14 @@ impl PgEmbed {
     /// Handle process logging
     ///
     pub async fn handle_process_io(&self, process: &mut Child) -> Result<(), PgEmbedError> {
-        if let Some(stdout) = process.stdout.take() {
-            let mut reader_out = BufReader::new(stdout).lines();
-
-            while let Some(line) = reader_out.next_line().map_err(|e| PgEmbedError::PgBufferReadError(e)).await? {
-                info!("{}", line);
-            }
+        let mut reader_out = BufReader::new(process.stdout.take().unwrap()).lines();
+        let mut reader_err = BufReader::new(process.stderr.take().unwrap()).lines();
+        if let Some(line) = reader_out.next_line().await.map_err(|e| PgEmbedError::PgBufferReadError(e))? {
+            info!("{}", line);
         }
 
-        if let Some(stderr) = process.stderr.take() {
-            let mut reader_err = BufReader::new(stderr).lines();
-
-            while let Some(line) = reader_err.next_line().map_err(|e| PgEmbedError::PgBufferReadError(e)).await? {
-                error!("{}", line);
-            }
+        if let Some(line) = reader_err.next_line().await.map_err(|e| PgEmbedError::PgBufferReadError(e))? {
+            error!("{}", line);
         }
 
         Ok(())
