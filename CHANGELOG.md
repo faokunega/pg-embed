@@ -1,3 +1,42 @@
+# v5.0.0
+___
+### Feature
+> - Caching postgresql binaries
+>    
+>   Removed **executables_dir** attribute from **PgSettings**
+> 
+>   The downloaded postgresql binaries are now cached in the following directories:
+>   
+>   - On Linux:
+>     
+>     **$XDG_CACHE_HOME/pg-embed**
+> 
+>     or 
+> 
+>     **$HOME/.cache/pg-embed**
+>   - On Windows: 
+>     
+>     **{FOLDERID_LocalAppData}/pg-embed**
+>   - On MacOS:
+> 
+>     **$HOME/Library/Caches/pg-embed**
+> 
+>   Binaries download only happens if cached binaries are not found
+> - Cleaner logging
+>   
+>   Logging is now done with the **log** crate. 
+>   
+>   In order to produce log output a logger implementation compatible with the facade has to be used.
+>   
+>   See https://crates.io/crates/log for detailed info
+> 
+>
+### Breaking changes
+**PgSettings** ***executables_dir*** attribute has been removed (*described above*).
+
+### Thanks
+❤️ - Big thanks to **nicoulaj** for his contribution
+
 # v0.4.3
 ___
 - migrator fix

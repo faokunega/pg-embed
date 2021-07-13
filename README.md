@@ -21,7 +21,7 @@ will be available soon.
      ```toml
      # Cargo.toml
      [dependencies]
-     pg-embed = { version = "0.4", default-features = false, features = ["rt_tokio"] }
+     pg-embed = { version = "0.5", default-features = false, features = ["rt_tokio"] }
      ```
 
   *Library with sqlx migration support*
@@ -29,7 +29,7 @@ will be available soon.
      ```toml
      # Cargo.toml
      [dependencies]
-     pg-embed = "0.4"
+     pg-embed = "0.5"
      ```
 
 A postgresql instance can be created using<br/>
@@ -97,8 +97,11 @@ A postgresql instance can be created using<br/>
      // run migration sql scripts
      // to enable migrations view [Usage] for details
      pg.migrate("database_name").await;
- };
-     // get the base postgresql uri
+     
+     // stop postgresql database
+     pg.stop_db().await;
+};
+// get the base postgresql uri
      // `postgres://{username}:{password}@localhost:{port}`
      let pg_uri: &str = &pg.db_uri;
 
@@ -106,8 +109,6 @@ A postgresql instance can be created using<br/>
      // `postgres://{username}:{password}@localhost:{port}/{specified_database_name}`
      let pg_db_uri: String = pg.full_db_uri("database_name");
 
-     // stop postgresql database
-     pg.stop_db();
 
 
  ```

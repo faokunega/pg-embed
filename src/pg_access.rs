@@ -160,6 +160,9 @@ impl PgAccess {
         Ok(())
     }
 
+    ///
+    /// Create initdb command
+    ///
     pub fn init_db_command(&self, database_dir: &PathBuf, user: &str, auth_method: &PgAuthMethod) -> Box<Cell<Command>> {
         let init_db_executable = self.init_db_exe.to_str().unwrap();
         let password_file_arg = format!("--pwfile={}", self.zip_file_path.to_str().unwrap());
@@ -195,6 +198,9 @@ impl PgAccess {
         command
     }
 
+    ///
+    /// Create pg_ctl start command
+    ///
     pub fn start_db_command(&self, database_dir: &PathBuf, port: i16) -> Box<Cell<Command>> {
         let pg_ctl_executable = self.pg_ctl_exe.to_str().unwrap();
         let port_arg = format!("-F -p {}", port.to_string());
@@ -211,6 +217,9 @@ impl PgAccess {
         command
     }
 
+    ///
+    /// Create pg_ctl stop command
+    ///
     pub fn stop_db_command(&self, database_dir: &PathBuf) -> Box<Cell<Command>> {
         let pg_ctl_executable = self.pg_ctl_exe.to_str().unwrap();
         let mut command =
