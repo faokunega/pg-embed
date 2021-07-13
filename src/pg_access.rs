@@ -4,15 +4,16 @@
 
 use std::path::PathBuf;
 
-use crate::errors::errors_common::PgEmbedError;
+use crate::pg_errors::PgEmbedError;
 use futures::TryFutureExt;
 use tokio::io::AsyncWriteExt;
-use crate::postgres::{PgSettings, PgAuthMethod};
-use crate::pg_fetch::{PgFetchSettings, OperationSystem};
+use crate::postgres::PgSettings;
+use crate::pg_fetch::PgFetchSettings;
 use std::io::{Error, ErrorKind};
-use crate::errors::errors_common::PgEmbedError::PgPurgeFailure;
+use crate::pg_errors::PgEmbedError::PgPurgeFailure;
 use std::cell::Cell;
 use tokio::process::Command;
+use crate::pg_enums::{PgAuthMethod, OperationSystem};
 
 ///
 /// Access to pg_ctl, initdb, database directory and cache directory

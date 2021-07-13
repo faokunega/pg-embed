@@ -6,8 +6,8 @@
 //!
 use futures::{TryFutureExt};
 use std::process::{Command, Stdio, ExitStatus};
-use crate::pg_fetch;
-use crate::errors::errors_common::PgEmbedError;
+use crate::{pg_fetch, pg_unpack};
+use crate::pg_errors::PgEmbedError;
 #[cfg(any(feature = "rt_tokio", feature = "rt_tokio_migrate"))]
 use tokio::io::AsyncWriteExt;
 #[cfg(feature = "rt_tokio_migrate")]
@@ -26,6 +26,7 @@ use crate::pg_access::PgAccess;
 use tokio::time::error::Elapsed;
 use tokio::io::{BufReader, AsyncBufReadExt};
 use tokio::process::Child;
+use crate::pg_enums::{PgAuthMethod, PgServerStatus, PgProcessType};
 
 
 ///
@@ -50,68 +51,6 @@ pub struct PgSettings {
     /// migrations folder
     /// sql script files to execute on migrate
     pub migration_dir: Option<PathBuf>,
-}
-
-///
-/// Postgresql authentication method
-///
-/// Choose between plain password, md5 or scram_sha_256 authentication.
-/// Scram_sha_256 authentication is only available on postgresql versions >= 11
-///
-pub enum PgAuthMethod {
-    /// plain-text
-    Plain,
-    /// md5
-    MD5,
-    /// scram_sha_256
-    ScramSha256,
-}
-
-///
-/// Postgresql server status
-///
-#[derive(PartialEq)]
-pub enum PgServerStatus {
-    /// Postgres uninitialized
-    Uninitialized,
-    /// Initialization process running
-    Initializing,
-    /// Initialization process finished
-    Initialized,
-    /// Postgres server process starting
-    Starting,
-    /// Postgres server process started
-    Started,
-    /// Postgres server process stopping
-    Stopping,
-    /// Postgres server process stopped
-    Stopped,
-    /// Postgres failure
-    Failure,
-}
-
-///
-/// Postgesql process type
-///
-/// Used internally for distinguishing processes being executed
-///
-enum PgProcessType {
-    /// initdb process
-    InitDb,
-    /// pg_ctl start process
-    StartDb,
-    /// pg_ctl stop process
-    StopDb,
-}
-
-impl ToString for PgProcessType {
-    fn to_string(&self) -> String {
-        match self {
-            PgProcessType::InitDb => { "initdb".to_string() }
-            PgProcessType::StartDb => { "start".to_string() }
-            PgProcessType::StopDb => { "stop".to_string() }
-        }
-    }
 }
 
 ///
@@ -185,10 +124,12 @@ impl PgEmbed {
     /// Download and unpack postgres binaries
     ///
     pub async fn aquire_postgres(&self) -> Result<(), PgEmbedError> {
-        let pg_bin_data = pg_fetch::fetch_postgres(&self.fetch_settings).await?;
+        let pg_bin_data = &self.fetch_settings.fetch_postgres().await?;
         self.pg_access.write_pg_zip(&pg_bin_data).await?;
-        pg_fetch::unpack_postgres(&self.pg_access.zip_file_path, &self.pg_access.cache_dir).await
+        pg_unpack::unpack_postgres(&self.pg_access.zip_file_path, &self.pg_access.cache_dir).await
     }
+
+    // pub async fn database_dir_status(&self) -> Result<>
 
     ///
     /// Initialize postgresql database

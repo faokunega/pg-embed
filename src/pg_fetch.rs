@@ -11,98 +11,12 @@ use futures::{TryFutureExt};
 use std::borrow::Borrow;
 use std::path::{PathBuf, Path};
 
-use crate::errors::errors_common::PgEmbedError;
+use crate::pg_errors::PgEmbedError;
 use reqwest::Response;
 use tokio::io::AsyncWriteExt;
 use bytes::Bytes;
+use crate::pg_enums::{OperationSystem, Architecture};
 
-/// The operation systems enum
-#[derive(Debug, PartialEq)]
-pub enum OperationSystem {
-    Darwin,
-    Windows,
-    Linux,
-    AlpineLinux,
-}
-
-impl ToString for OperationSystem {
-    fn to_string(&self) -> String {
-        match &self {
-            OperationSystem::Darwin => { "darwin".to_string() }
-            OperationSystem::Windows => { "windows".to_string() }
-            OperationSystem::Linux => { "linux".to_string() }
-            OperationSystem::AlpineLinux => { "linux".to_string() }
-        }
-    }
-}
-
-impl Default for OperationSystem {
-    fn default() -> Self {
-        #[cfg(not(any(target_os = "linux", target_os = "windows")))]
-            { OperationSystem::Darwin }
-
-        #[cfg(target_os = "linux")]
-            { OperationSystem::Linux }
-
-        #[cfg(target_os = "windows")]
-            { OperationSystem::Windows }
-    }
-}
-
-/// The cpu architectures enum
-#[derive(Debug, PartialEq)]
-pub enum Architecture {
-    Amd64,
-    I386,
-    Arm32v6,
-    Arm32v7,
-    Arm64v8,
-    Ppc64le,
-}
-
-impl ToString for Architecture {
-    fn to_string(&self) -> String {
-        match &self {
-            Architecture::Amd64 => {
-                "amd64".to_string()
-            }
-            Architecture::I386 => {
-                "i386".to_string()
-            }
-            Architecture::Arm32v6 => {
-                "arm32v6".to_string()
-            }
-            Architecture::Arm32v7 => {
-                "arm32v7".to_string()
-            }
-            Architecture::Arm64v8 => {
-                "arm64v8".to_string()
-            }
-            Architecture::Ppc64le => {
-                "ppc64le".to_string()
-            }
-        }
-    }
-}
-
-impl Default for Architecture {
-    fn default() -> Self {
-        #[cfg(not(any(target_arch = "x86", target_arch = "arm", target_arch = "aarch64", target_arch = "powerpc64")))]
-            { Architecture::Amd64 }
-
-        #[cfg(target_arch = "x86")]
-            { Architecture::I386 }
-
-        #[cfg(target_arch = "arm")]
-            { Architecture::Arm32v7 }
-
-        #[cfg(target_arch = "aarch64")]
-            { Architecture::Arm64v8 }
-
-        #[cfg(target_arch = "powerpc64")]
-            { Architecture::Ppc64le }
-    }
-}
 
 /// Postgresql version struct (simple version wrapper)
 pub struct PostgresVersion(
@@ -161,109 +75,33 @@ impl PgFetchSettings {
             } else { self.architecture.to_string() };
         format!("{}-{}", os, arch)
     }
-}
 
-///
-/// Fetch postgres binaries
-///
-/// The [settings](PgFetchSettings) parameter determines which binary to load.
-/// Returns the data of the downloaded binary in an `Ok([u8])` on success, otherwise returns an error.
-///
-pub async fn fetch_postgres(
-    settings: &PgFetchSettings
-) -> Result<Box<Bytes>, PgEmbedError>
-{
-    let platform = settings.platform();
-    let download_url = format!(
-        "{}/maven2/io/zonky/test/postgres/embedded-postgres-binaries-{}/{}/embedded-postgres-binaries-{}-{}.jar",
-        &settings.host,
-        &platform,
-        &settings.version.0,
-        &platform,
-        &settings.version.0);
-    let mut response: Response =
-        reqwest::get(download_url).map_err(|e|
-            { PgEmbedError::DownloadFailure(e) })
+    ///
+    /// Fetch postgres binaries
+    ///
+    /// Returns the data of the downloaded binary in an `Ok([u8])` on success, otherwise returns an error.
+    ///
+    pub async fn fetch_postgres(&self) -> Result<Box<Bytes>, PgEmbedError>
+    {
+        let platform = &self.platform();
+        let version = self.version.0;
+        let download_url = format!(
+            "{}/maven2/io/zonky/test/postgres/embedded-postgres-binaries-{}/{}/embedded-postgres-binaries-{}-{}.jar",
+            &self.host,
+            &platform,
+            version,
+            &platform,
+            version);
+        let mut response: Response =
+            reqwest::get(download_url).map_err(|e|
+                { PgEmbedError::DownloadFailure(e) })
+                .await?;
+
+        let content: Bytes = response.bytes().map_err(|e| PgEmbedError::ConversionFailure(e))
             .await?;
 
-    let content: Bytes = response.bytes().map_err(|e| PgEmbedError::ConversionFailure(e))
-        .await?;
-
-    Ok(Box::new(content))
-}
-
-///
-/// Unzip the postgresql txz file
-///
-/// Returns `Ok(PathBuf(txz_file_path))` file path of the txz archive on success, otherwise returns an error.
-///
-fn unzip_txz(zip_file_path: &PathBuf, cache_dir: &PathBuf) -> Result<PathBuf, PgEmbedError> {
-    let mut zip =
-        archiver_rs::Zip::open(zip_file_path.as_path()).map_err(|e| PgEmbedError::ReadFileError(e))?;
-    let file_name = zip.files().map_err(|e| PgEmbedError::UnpackFailure(e))?
-        .into_iter()
-        .find(|name| {
-            name.ends_with(".txz")
-        });
-    match file_name {
-        Some(file_name) => {
-            // decompress zip
-            let mut target_path = cache_dir.clone();
-            target_path.push(&file_name);
-            zip.extract_single(
-                &target_path.as_path(),
-                file_name.clone(),
-            ).map_err(|e| PgEmbedError::UnpackFailure(e))?;
-            Ok(target_path)
-        }
-        None => { Err(PgEmbedError::InvalidPgPackage("no postgresql txz in zip".to_string())) }
+        Ok(Box::new(content))
     }
 }
 
-///
-/// Decompress the postgresql txz file
-///
-/// Returns `Ok(PathBuf(tar_file_path))` (*the file path to the postgresql tar file*) on success, otherwise returns an error.
-///
-fn decompress_xz(file_path: &PathBuf) -> Result<PathBuf, PgEmbedError> {
-    let mut xz =
-        archiver_rs::Xz::open(
-            file_path.as_path(),
-        ).map_err(|e| PgEmbedError::ReadFileError(e))?;
-    // rename file path suffix from .txz to .tar
-    let target_path = file_path.with_extension(".tar");
-    xz.decompress(&target_path.as_path()).map_err(|e| PgEmbedError::UnpackFailure(e))?;
-    Ok(target_path)
-}
 
-///
-/// Unpack the postgresql tar file
-///
-/// Returns `Ok(())` on success, otherwise returns an error.
-///
-fn decompress_tar(file_path: &PathBuf, cache_dir: &PathBuf) -> Result<(), PgEmbedError> {
-    let mut tar =
-        archiver_rs::Tar::open(
-            &file_path.as_path(),
-        ).map_err(|e| PgEmbedError::ReadFileError(e))?;
-
-    tar.extract(cache_dir.as_path()).map_err(|e| PgEmbedError::UnpackFailure(e))?;
-
-    Ok(())
-}
-
-///
-/// Unpack the postgresql executables
-///
-/// Returns `Ok(())` on success, otherwise returns an error.
-///
-pub async fn unpack_postgres(
-    zip_file_path: &PathBuf, cache_dir: &PathBuf,
-) -> Result<(), PgEmbedError> {
-    let txz_file_path = unzip_txz(&zip_file_path, &cache_dir)?;
-    let tar_file_path = decompress_xz(&txz_file_path)?;
-    tokio::fs::remove_file(txz_file_path).map_err(|e| PgEmbedError::PgCleanUpFailure(e)).await?;
-    decompress_tar(&tar_file_path, &cache_dir);
-    tokio::fs::remove_file(tar_file_path).map_err(|e| PgEmbedError::PgCleanUpFailure(e)).await?;
-    Ok(())
-}

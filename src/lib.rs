@@ -157,6 +157,8 @@ compile_error!(
 extern crate dirs;
 pub mod pg_fetch;
 pub mod postgres;
-pub mod errors;
 pub mod pg_access;
+pub mod pg_enums;
+pub mod pg_unpack;
+pub mod pg_errors;
 

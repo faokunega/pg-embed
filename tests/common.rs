@@ -1,9 +1,10 @@
-use pg_embed::postgres::{PgEmbed, PgSettings, PgAuthMethod};
+use pg_embed::postgres::{PgEmbed, PgSettings};
 use pg_embed::pg_fetch::{PgFetchSettings, PG_V13};
 use std::time::Duration;
 use std::path::PathBuf;
 use std::io::{Error, ErrorKind};
-use pg_embed::errors::errors_common::PgEmbedError;
+use pg_embed::pg_errors::PgEmbedError;
+use pg_embed::pg_enums::PgAuthMethod;
 
 pub async fn setup() -> Result<PgEmbed, PgEmbedError> {
     let pg_settings = PgSettings{
