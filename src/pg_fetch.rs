@@ -11,20 +11,6 @@ use futures::{TryFutureExt};
 use std::borrow::Borrow;
 use std::path::{PathBuf, Path};
 
-// these cfg feature settings for PgEmbedError are really convoluted, but getting syntax errors otherwise
-#[cfg(not(any(feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix", feature = "rt_actix_migrate")))]
-use crate::errors::errors_tokio::PgEmbedErrorExt;
-#[cfg(feature = "rt_tokio_migrate")]
-use crate::errors::errors_tokio_migrate::PgEmbedErrorExt;
-#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std_migrate", feature = "rt_actix", feature = "rt_actix_migrate")))]
-use crate::errors::errors_async_std::PgEmbedErrorExt;
-#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_actix", feature = "rt_actix_migrate")))]
-use crate::errors::errors_async_std_migrate::PgEmbedErrorExt;
-#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix_migrate")))]
-use crate::errors::errors_actix::PgEmbedErrorExt;
-#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix")))]
-use crate::errors::errors_actix_migrate::PgEmbedErrorExt;
-
 use crate::errors::errors_common::PgEmbedError;
 use reqwest::Response;
 use tokio::io::AsyncWriteExt;
@@ -197,10 +183,10 @@ pub async fn fetch_postgres(
         &settings.version.0);
     let mut response: Response =
         reqwest::get(download_url).map_err(|e|
-            { PgEmbedErrorExt::DownloadFailure(e) })
+            { PgEmbedError::DownloadFailure(e) })
             .await?;
 
-    let content: Bytes = response.bytes().map_err(|e| PgEmbedErrorExt::ConversionFailure(e))
+    let content: Bytes = response.bytes().map_err(|e| PgEmbedError::ConversionFailure(e))
         .await?;
 
     Ok(Box::new(content))

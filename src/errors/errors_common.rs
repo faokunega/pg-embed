@@ -1,19 +1,5 @@
 use thiserror::Error;
 
-// these cfg feature settings for PgEmbedError are really convoluted, but getting syntax errors otherwise
-#[cfg(not(any(feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix", feature = "rt_actix_migrate")))]
-use crate::errors::errors_tokio::PgEmbedErrorExt;
-#[cfg(feature = "rt_tokio_migrate")]
-use crate::errors::errors_tokio_migrate::PgEmbedErrorExt;
-#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std_migrate", feature = "rt_actix", feature = "rt_actix_migrate")))]
-use crate::errors::errors_async_std::PgEmbedErrorExt;
-#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_actix", feature = "rt_actix_migrate")))]
-use crate::errors::errors_async_std_migrate::PgEmbedErrorExt;
-#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix_migrate")))]
-use crate::errors::errors_actix::PgEmbedErrorExt;
-#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix")))]
-use crate::errors::errors_actix_migrate::PgEmbedErrorExt;
-
 ///
 /// Common pg_embed errors, independent from features used
 ///
@@ -55,7 +41,44 @@ pub enum PgEmbedError {
     /// Buffer read error
     #[error("buffer read error")]
     PgBufferReadError(std::io::Error),
-    /// PgEmbed extended error
-    #[error("pg_embed extended error")]
-    PgEmbedErrorExtended(#[from]PgEmbedErrorExt),
+    /// Postgresql binaries download failure
+    #[error("postgresql binaries download failure")]
+    #[cfg(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_actix", feature = "rt_actix_migrate"))]
+    DownloadFailure(reqwest::Error),
+    /// Request response bytes convertion failure
+    #[error("conversion failure")]
+    #[cfg(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_actix", feature = "rt_actix_migrate"))]
+    ConversionFailure(reqwest::Error),
+    /// Postgresql binaries download failure
+    #[error("postgresql binaries download failure")]
+    #[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_actix", feature = "rt_actix_migrate")))]
+    DownloadFailure(surf::Error),
+    /// Request response bytes convertion failure
+    #[error("conversion failure")]
+    #[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_actix", feature = "rt_actix_migrate")))]
+    ConversionFailure(surf::Error),
+    /// sqlx query error
+    #[error("query error")]
+    #[cfg(any(feature = "rt_tokio_migrate"))]
+    SqlQueryError(#[from] sqlx_tokio::Error),
+    /// migration error
+    #[error("migration error")]
+    #[cfg(any(feature = "rt_tokio_migrate"))]
+    MigrationError(#[from] sqlx_tokio::migrate::MigrateError),
+    /// sqlx query error
+    #[error("query error")]
+    #[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_actix", feature = "rt_actix_migrate", feature = "rt_async_std")))]
+    SqlQueryError(#[from] sqlx_async_std::Error),
+    /// migration error
+    #[error("migration error")]
+    #[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_actix", feature = "rt_actix_migrate", feature = "rt_async_std")))]
+    MigrationError(#[from] sqlx_async_std::migrate::MigrateError),
+    /// sqlx query error
+    #[error("query error")]
+    #[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_actix", feature = "rt_async_std_migrate", feature = "rt_async_std")))]
+    SqlQueryError(#[from] sqlx_actix::Error),
+    /// migration error
+    #[error("migration error")]
+    #[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_actix", feature = "rt_async_std_migrate", feature = "rt_async_std")))]
+    MigrationError(#[from] sqlx_actix::migrate::MigrateError),
 }

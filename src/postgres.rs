@@ -27,19 +27,6 @@ use tokio::time::error::Elapsed;
 use tokio::io::{BufReader, AsyncBufReadExt};
 use tokio::process::Child;
 
-// these cfg feature settings for PgEmbedError are really convoluted, but getting syntax errors otherwise
-#[cfg(not(any(feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix", feature = "rt_actix_migrate")))]
-use crate::errors::errors_tokio::PgEmbedErrorExt;
-#[cfg(feature = "rt_tokio_migrate")]
-use crate::errors::errors_tokio_migrate::PgEmbedErrorExt;
-#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std_migrate", feature = "rt_actix", feature = "rt_actix_migrate")))]
-use crate::errors::errors_async_std::PgEmbedErrorExt;
-#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_actix", feature = "rt_actix_migrate")))]
-use crate::errors::errors_async_std_migrate::PgEmbedErrorExt;
-#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix_migrate")))]
-use crate::errors::errors_actix::PgEmbedErrorExt;
-#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix")))]
-use crate::errors::errors_actix_migrate::PgEmbedErrorExt;
 
 ///
 /// Database settings
@@ -231,7 +218,8 @@ impl PgEmbed {
         self.server_status = PgServerStatus::Starting;
         let mut start_db_command = self.pg_access.start_db_command(&self.pg_settings.database_dir, self.pg_settings.port);
 
-        // TODO: somehow the standard output of this command can not be piped, if piped it does not terminate. Find a solution!
+        // TODO: somehow the standard output of this command can not be piped,
+        // TODO: if piped it does not exit even though "-w" pg_ctl's wait argument is set, which should send an exit status. Find a solution!
         let mut process = start_db_command.get_mut()
             // .stdin(Stdio::null())
             // .stdout(Stdio::piped())
@@ -330,7 +318,7 @@ impl PgEmbed {
     /// Create a database
     ///
     #[cfg(any(feature = "rt_tokio_migrate", feature = "rt_async_std_migrate", feature = "rt_actix_migrate"))]
-    pub async fn create_database(&self, db_name: &str) -> Result<(), PgEmbedErrorExt> {
+    pub async fn create_database(&self, db_name: &str) -> Result<(), PgEmbedError> {
         Postgres::create_database(&self.full_db_uri(db_name)).await?;
         Ok(())
     }
@@ -339,7 +327,7 @@ impl PgEmbed {
     /// Drop a database
     ///
     #[cfg(any(feature = "rt_tokio_migrate", feature = "rt_async_std_migrate", feature = "rt_actix_migrate"))]
-    pub async fn drop_database(&self, db_name: &str) -> Result<(), PgEmbedErrorExt> {
+    pub async fn drop_database(&self, db_name: &str) -> Result<(), PgEmbedError> {
         Postgres::drop_database(&self.full_db_uri(db_name)).await?;
         Ok(())
     }
@@ -348,7 +336,7 @@ impl PgEmbed {
     /// Check database existance
     ///
     #[cfg(any(feature = "rt_tokio_migrate", feature = "rt_async_std_migrate", feature = "rt_actix_migrate"))]
-    pub async fn database_exists(&self, db_name: &str) -> Result<bool, PgEmbedErrorExt> {
+    pub async fn database_exists(&self, db_name: &str) -> Result<bool, PgEmbedError> {
         let result = Postgres::database_exists(&self.full_db_uri(db_name)).await?;
         Ok(result)
     }
@@ -366,7 +354,7 @@ impl PgEmbed {
     /// Run migrations
     ///
     #[cfg(any(feature = "rt_tokio_migrate", feature = "rt_async_std_migrate", feature = "rt_actix_migrate"))]
-    pub async fn migrate(&self, db_name: &str) -> Result<(), PgEmbedErrorExt> {
+    pub async fn migrate(&self, db_name: &str) -> Result<(), PgEmbedError> {
         if let Some(migration_dir) = &self.pg_settings.migration_dir {
             let m = Migrator::new(migration_dir.as_path()).await?;
             let pool = PgPoolOptions::new().connect(&self.full_db_uri(db_name)).await?;

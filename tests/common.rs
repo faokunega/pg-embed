@@ -1,18 +1,5 @@
 use pg_embed::postgres::{PgEmbed, PgSettings, PgAuthMethod};
 use pg_embed::pg_fetch::{PgFetchSettings, PG_V13};
-// these cfg feature settings for PgEmbedError are really convoluted, but getting syntax errors otherwise
-#[cfg(not(any(feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix", feature = "rt_actix_migrate")))]
-use pg_embed::errors::errors_tokio::PgEmbedErrorExt;
-#[cfg(feature = "rt_tokio_migrate")]
-use pg_embed::errors::errors_tokio_migrate::PgEmbedErrorExt;
-#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std_migrate", feature = "rt_actix", feature = "rt_actix_migrate")))]
-use pg_embed::errors::errors_async_std::PgEmbedErrorExt;
-#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_actix", feature = "rt_actix_migrate")))]
-use pg_embed::errors::errors_async_std_migrate::PgEmbedErrorExt;
-#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix_migrate")))]
-use pg_embed::errors::errors_actix::PgEmbedErrorExt;
-#[cfg(not(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_async_std", feature = "rt_async_std_migrate", feature = "rt_actix")))]
-use pg_embed::errors::errors_actix_migrate::PgEmbedErrorExt;
 use std::time::Duration;
 use std::path::PathBuf;
 use std::io::{Error, ErrorKind};
