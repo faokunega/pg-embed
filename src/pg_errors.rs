@@ -41,6 +41,9 @@ pub enum PgEmbedError {
     /// Buffer read error
     #[error("buffer read error")]
     PgBufferReadError(std::io::Error),
+    /// Lock error
+    #[error("lock error")]
+    PgLockError(),
     /// Postgresql binaries download failure
     #[error("postgresql binaries download failure")]
     #[cfg(any(feature = "rt_tokio", feature = "rt_tokio_migrate", feature = "rt_actix", feature = "rt_actix_migrate"))]

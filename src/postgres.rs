@@ -28,6 +28,10 @@ use tokio::time::error::Elapsed;
 use tokio::io::{BufReader, AsyncBufReadExt};
 use tokio::process::Child;
 use crate::pg_enums::{PgAuthMethod, PgServerStatus, PgProcessType};
+use tokio::sync::Mutex;
+use std::sync::Arc;
+use std::collections::HashMap;
+
 
 
 ///
@@ -77,7 +81,9 @@ pub struct PgEmbed {
 impl Drop for PgEmbed {
     fn drop(&mut self) {
         if self.server_status != PgServerStatus::Stopped {
-            let _ = &self.stop_db();
+            tokio::runtime::Runtime::new()
+                .expect("tokio runtime could not be created")
+                .block_on(self.stop_db());
         }
         if !&self.pg_settings.persistent {
             let _ = &self.pg_access.clean();
@@ -116,7 +122,7 @@ impl PgEmbed {
     ///
     pub async fn setup(&mut self) -> Result<(), PgEmbedError> {
         if !self.pg_access.pg_executables_cached().await? {
-            &self.aquire_postgres().await?;
+            &self.acquire_postgres().await?;
         }
         self.pg_access.create_password_file(self.pg_settings.password.as_bytes()).await?;
         if !self.pg_access.database_dir_exists().await? {
@@ -128,12 +134,14 @@ impl PgEmbed {
     ///
     /// Download and unpack postgres binaries
     ///
-    pub async fn aquire_postgres(&self) -> Result<(), PgEmbedError> {
+    pub async fn acquire_postgres(&self) -> Result<(), PgEmbedError> {
+        self.pg_access.mark_acquiring();
         let pg_bin_data = &self.fetch_settings.fetch_postgres().await?;
         self.pg_access.write_pg_zip(&pg_bin_data).await?;
-        pg_unpack::unpack_postgres(&self.pg_access.zip_file_path, &self.pg_access.cache_dir).await
+        pg_unpack::unpack_postgres(&self.pg_access.zip_file_path, &self.pg_access.cache_dir).await?;
+        self.pg_access.unmark_acquiring();
+        Ok(())
     }
-
 
     // pub async fn database_dir_status(&self) -> Result<>
 

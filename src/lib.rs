@@ -162,4 +162,5 @@ pub mod pg_access;
 pub mod pg_enums;
 pub mod pg_unpack;
 pub mod pg_errors;
-
+#[macro_use]
+extern crate lazy_static;

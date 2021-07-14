@@ -2,7 +2,7 @@
 //! Cache postgresql files, access to executables, clean up files
 //!
 
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 
 use crate::pg_errors::PgEmbedError;
 use futures::TryFutureExt;
@@ -14,6 +14,21 @@ use crate::pg_errors::PgEmbedError::PgPurgeFailure;
 use std::cell::Cell;
 use tokio::process::Command;
 use crate::pg_enums::{PgAuthMethod, OperationSystem};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use std::collections::HashMap;
+
+
+
+lazy_static! {
+    ///
+    /// Stores the paths to the cache directories while acquiring the related postgres binaries
+    ///
+    /// Used to prevent simultaneous downloads and unpacking of the same binaries
+    /// while executing multiple PgEmbed instances concurrently.
+    ///
+    static ref ACQUIRED_PG_BINS: Arc<Mutex<HashMap<PathBuf, bool>>> = Arc::new(Mutex::new(HashMap::with_capacity(5)));
+}
 
 ///
 /// Access to pg_ctl, initdb, database directory and cache directory
@@ -45,8 +60,6 @@ impl PgAccess {
         pg_ctl.push("bin/pg_ctl");
         let mut init_db = cache_dir.clone();
         init_db.push("bin/initdb");
-        let mut pw_file = cache_dir.clone();
-        pw_file.push("pwfile");
         let mut zip_file_path = cache_dir.clone();
         let platform =
             fetch_settings.platform();
@@ -56,6 +69,8 @@ impl PgAccess {
             &fetch_settings.version.0
         );
         zip_file_path.push(file_name);
+        let mut pw_file = database_dir.clone();
+        pw_file.push("pwfile");
 
         Ok(
             PgAccess {
@@ -97,7 +112,21 @@ impl PgAccess {
     /// Check if postgresql executables are already cached
     ///
     pub async fn pg_executables_cached(&self) -> Result<bool, PgEmbedError> {
-        if let Ok(_) = tokio::fs::File::open(self.init_db_exe.as_path()).await {
+        Self::path_exists(self.init_db_exe.as_path()).await
+    }
+
+    ///
+    /// Check if database directory exists
+    ///
+    pub async fn database_dir_exists(&self) -> Result<bool, PgEmbedError> {
+        Self::path_exists(self.database_dir.as_path()).await
+    }
+
+    ///
+    /// Check if file path exists
+    ///
+    async fn path_exists(file: &Path) -> Result<bool, PgEmbedError> {
+        if let Ok(_) = tokio::fs::File::open(file).await {
             Ok(true)
         } else {
             Ok(false)
@@ -105,15 +134,41 @@ impl PgAccess {
     }
 
     ///
-    /// Check if database directory exists
+    /// Mark cache directory path
     ///
-    pub async fn database_dir_exists(&self) -> Result<bool, PgEmbedError> {
-        if let Ok(_) = tokio::fs::File::open(self.database_dir.as_path()).await {
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+    /// Used while acquiring postgresql binaries, so that no two instances
+    /// of pg-embed try to acquire the same resources
+    ///
+    pub async fn mark_acquiring(&self) -> Result<(), PgEmbedError> {
+        let mut lock = ACQUIRED_PG_BINS.lock().await;
+        lock.insert(self.cache_dir.clone(), false);
+        Ok(())
     }
+
+    ///
+    /// Unmark cache directory path
+    ///
+    /// Used when acquiring postgresql finished, so that other instances
+    /// of pg-embed
+    ///
+    pub async fn unmark_acquiring(&self) -> Result<(), PgEmbedError> {
+        let mut lock = ACQUIRED_PG_BINS.lock().await;
+        lock.insert(self.cache_dir.clone(), true);
+        Ok(())
+    }
+
+    ///
+    /// Check cache directory marker
+    ///
+    ///
+    pub async fn get_acquiring_marker(&self) -> Result<bool, PgEmbedError> {
+        let lock = ACQUIRED_PG_BINS.lock().await;
+        lock
+            .get(&self.cache_dir)
+            .map(|marker| *marker)
+            .ok_or_else(|| PgEmbedError::PgLockError())
+    }
+
 
     ///
     /// Write pg binaries zip to postgresql cache directory
