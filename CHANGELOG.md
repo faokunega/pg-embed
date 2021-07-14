@@ -2,6 +2,7 @@
 ___
 ### Fix
 - Password was created at wrong destination
+- stopping db on drop fix
 
 # v0.5.1
 ___
