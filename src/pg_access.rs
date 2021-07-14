@@ -236,7 +236,7 @@ impl PgAccess {
     /// Returns `Ok(())` on success, otherwise returns an error.
     ///
     pub async fn create_password_file(&self, password: &[u8]) -> Result<(), PgEmbedError> {
-        let mut file: tokio::fs::File = tokio::fs::File::create(self.zip_file_path.as_path()).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
+        let mut file: tokio::fs::File = tokio::fs::File::create(self.pw_file_path.as_path()).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
         let _ = file
             .write(password).map_err(|e| PgEmbedError::WriteFileError(e))
             .await?;

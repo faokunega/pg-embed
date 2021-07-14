@@ -1,3 +1,8 @@
+# v0.5.2
+___
+### Fix
+- Password was created at wrong destination
+
 # v0.5.1
 ___
 ### Fix
