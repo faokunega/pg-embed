@@ -147,3 +147,14 @@ impl Default for Architecture {
             { Architecture::Ppc64le }
     }
 }
+
+/// The postgresql binaries acquisition status
+#[derive(Copy, Clone)]
+pub enum PgAcquisitionStatus{
+    /// Acquiring postgresql binaries
+    InProgress,
+    /// Finished acquiring postgresql binaries
+    Finished,
+    /// No acquisition
+    Undefined,
+}

@@ -13,10 +13,11 @@ use std::io::{Error, ErrorKind};
 use crate::pg_errors::PgEmbedError::PgPurgeFailure;
 use std::cell::Cell;
 use tokio::process::Command;
-use crate::pg_enums::{PgAuthMethod, OperationSystem};
+use crate::pg_enums::{PgAuthMethod, OperationSystem, PgAcquisitionStatus};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use std::collections::HashMap;
+use std::ops::Deref;
 
 
 
@@ -27,7 +28,7 @@ lazy_static! {
     /// Used to prevent simultaneous downloads and unpacking of the same binaries
     /// while executing multiple PgEmbed instances concurrently.
     ///
-    static ref ACQUIRED_PG_BINS: Arc<Mutex<HashMap<PathBuf, bool>>> = Arc::new(Mutex::new(HashMap::with_capacity(5)));
+    static ref ACQUIRED_PG_BINS: Arc<Mutex<HashMap<PathBuf, PgAcquisitionStatus>>> = Arc::new(Mutex::new(HashMap::with_capacity(5)));
 }
 
 ///
@@ -134,39 +135,66 @@ impl PgAccess {
     }
 
     ///
-    /// Mark cache directory path
+    /// Mark postgresql binaries acquisition in progress
     ///
     /// Used while acquiring postgresql binaries, so that no two instances
-    /// of pg-embed try to acquire the same resources
+    /// of PgEmbed try to acquire the same resources
     ///
-    pub async fn mark_acquiring(&self) -> Result<(), PgEmbedError> {
+    pub async fn mark_acquisition_in_progress(&self) -> Result<(), PgEmbedError> {
         let mut lock = ACQUIRED_PG_BINS.lock().await;
-        lock.insert(self.cache_dir.clone(), false);
+        lock.insert(self.cache_dir.clone(), PgAcquisitionStatus::InProgress);
         Ok(())
     }
 
     ///
-    /// Unmark cache directory path
+    /// Mark postgresql binaries acquisition finished
     ///
-    /// Used when acquiring postgresql finished, so that other instances
-    /// of pg-embed
+    /// Used when acquiring postgresql has finished, so that other instances
+    /// of PgEmbed don't try to reacquire resources
     ///
-    pub async fn unmark_acquiring(&self) -> Result<(), PgEmbedError> {
+    pub async fn mark_acquisition_finished(&self) -> Result<(), PgEmbedError> {
         let mut lock = ACQUIRED_PG_BINS.lock().await;
-        lock.insert(self.cache_dir.clone(), true);
+        lock.insert(self.cache_dir.clone(), PgAcquisitionStatus::Finished);
         Ok(())
     }
 
     ///
-    /// Check cache directory marker
+    /// Check postgresql acquisition status
     ///
-    ///
-    pub async fn get_acquiring_marker(&self) -> Result<bool, PgEmbedError> {
+    pub async fn acquisition_status(&self) -> PgAcquisitionStatus {
         let lock = ACQUIRED_PG_BINS.lock().await;
-        lock
-            .get(&self.cache_dir)
-            .map(|marker| *marker)
-            .ok_or_else(|| PgEmbedError::PgLockError())
+        let acquisition_status = lock
+            .get(&self.cache_dir);
+        match acquisition_status {
+            None => {
+                PgAcquisitionStatus::Undefined
+            }
+            Some(status) => {
+                *status
+            }
+        }
+    }
+
+    ///
+    /// Determine if postgresql binaries acquisition is needed
+    ///
+    pub async fn acquisition_needed(&self) -> Result<bool, PgEmbedError> {
+        if !self.pg_executables_cached().await? {
+            match self.acquisition_status().await {
+                PgAcquisitionStatus::InProgress => {
+                    // TODO: wait until acquisition is finished and do not return error
+                    Err(PgEmbedError::PgLockError())
+                }
+                PgAcquisitionStatus::Finished => {
+                    Ok(false)
+                }
+                PgAcquisitionStatus::Undefined => {
+                    Ok(true)
+                }
+            }
+        } else {
+            Ok(false)
+        }
     }
 
 

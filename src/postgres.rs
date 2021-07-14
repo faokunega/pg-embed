@@ -27,11 +27,10 @@ use crate::pg_access::PgAccess;
 use tokio::time::error::Elapsed;
 use tokio::io::{BufReader, AsyncBufReadExt};
 use tokio::process::Child;
-use crate::pg_enums::{PgAuthMethod, PgServerStatus, PgProcessType};
+use crate::pg_enums::{PgAuthMethod, PgServerStatus, PgProcessType, PgAcquisitionStatus};
 use tokio::sync::Mutex;
 use std::sync::Arc;
 use std::collections::HashMap;
-
 
 
 ///
@@ -121,8 +120,8 @@ impl PgEmbed {
     /// Download, unpack, create password file and database
     ///
     pub async fn setup(&mut self) -> Result<(), PgEmbedError> {
-        if !self.pg_access.pg_executables_cached().await? {
-            &self.acquire_postgres().await?;
+        if self.pg_access.acquisition_needed().await? {
+            self.acquire_postgres().await?;
         }
         self.pg_access.create_password_file(self.pg_settings.password.as_bytes()).await?;
         if !self.pg_access.database_dir_exists().await? {
@@ -135,11 +134,11 @@ impl PgEmbed {
     /// Download and unpack postgres binaries
     ///
     pub async fn acquire_postgres(&self) -> Result<(), PgEmbedError> {
-        self.pg_access.mark_acquiring();
+        self.pg_access.mark_acquisition_in_progress().await?;
         let pg_bin_data = &self.fetch_settings.fetch_postgres().await?;
         self.pg_access.write_pg_zip(&pg_bin_data).await?;
         pg_unpack::unpack_postgres(&self.pg_access.zip_file_path, &self.pg_access.cache_dir).await?;
-        self.pg_access.unmark_acquiring();
+        self.pg_access.mark_acquisition_finished().await?;
         Ok(())
     }
 

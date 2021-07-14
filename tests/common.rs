@@ -7,17 +7,19 @@ use pg_embed::pg_errors::PgEmbedError;
 use pg_embed::pg_enums::PgAuthMethod;
 use env_logger::Env;
 
-pub async fn setup() -> Result<PgEmbed, PgEmbedError> {
-    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
-    let _ = env_logger::builder().is_test(true).try_init();
-    let pg_settings = PgSettings{
-        database_dir: PathBuf::from("data_test/db"),
-        port: 5432,
+pub async fn setup(port: i16, database_dir: PathBuf) -> Result<PgEmbed, PgEmbedError> {
+    let _ =
+        env_logger::Builder::from_env(
+            Env::default().default_filter_or("info")
+        ).is_test(true).try_init();
+    let pg_settings = PgSettings {
+        database_dir,
+        port,
         user: "postgres".to_string(),
         password: "password".to_string(),
         auth_method: PgAuthMethod::MD5,
         persistent: false,
-        timeout: Duration::from_secs(60),
+        timeout: Duration::from_secs(20),
         migration_dir: None,
     };
     let fetch_settings = PgFetchSettings {
