@@ -1,3 +1,9 @@
+# v0.5.1
+___
+### Fix
+- **PgEmbed**'s ***stop_db()*** did not execute on drop
+- Multiple concurrent **PgEmbed** instances tried each to download the same resources when being setup
+
 # v0.5.0
 ___
 ### Feature
