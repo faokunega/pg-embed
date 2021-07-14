@@ -31,6 +31,8 @@ use crate::pg_enums::{PgAuthMethod, PgServerStatus, PgProcessType, PgAcquisition
 use tokio::sync::Mutex;
 use std::sync::Arc;
 use std::collections::HashMap;
+use tokio::runtime::Handle;
+use std::io::BufRead;
 
 
 ///
@@ -80,9 +82,7 @@ pub struct PgEmbed {
 impl Drop for PgEmbed {
     fn drop(&mut self) {
         if self.server_status != PgServerStatus::Stopped {
-            tokio::runtime::Runtime::new()
-                .expect("tokio runtime could not be created")
-                .block_on(self.stop_db());
+            self.stop_db_sync();
         }
         if !&self.pg_settings.persistent {
             let _ = &self.pg_access.clean();
@@ -124,7 +124,7 @@ impl PgEmbed {
             self.acquire_postgres().await?;
         }
         self.pg_access.create_password_file(self.pg_settings.password.as_bytes()).await?;
-        if !self.pg_access.database_dir_exists().await? {
+        if !self.pg_access.db_files_exist().await? {
             &self.init_db().await?;
         }
         Ok(())
@@ -204,6 +204,25 @@ impl PgEmbed {
         self.timeout_pg_process(&mut process, PgProcessType::StopDb).await
     }
 
+
+    ///
+    /// Stop postgresql database synchronous
+    ///
+    /// Returns `Ok(())` on success, otherwise returns an error.
+    ///
+    pub fn stop_db_sync(&mut self) -> Result<(), PgEmbedError> {
+        self.server_status = PgServerStatus::Stopping;
+
+        let mut stop_db_command = self.pg_access.stop_db_command_sync(&self.pg_settings.database_dir);
+        let mut process = stop_db_command.get_mut()
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| PgEmbedError::PgStopFailure(e))?;
+
+        self.handle_process_io_sync(&mut process)
+    }
+
     ///
     /// Execute postgresql process with timeout
     ///
@@ -258,6 +277,17 @@ impl PgEmbed {
             error!("{}", line);
         }
 
+        Ok(())
+    }
+
+    ///
+    /// Handle process logging synchronous
+    ///
+    pub fn handle_process_io_sync(&self, process: &mut std::process::Child) -> Result<(), PgEmbedError> {
+        let mut reader_out = std::io::BufReader::new(process.stdout.take().unwrap()).lines();
+        let mut reader_err = std::io::BufReader::new(process.stderr.take().unwrap()).lines();
+        reader_out.for_each(|line| info!("{}", line.unwrap()));
+        reader_err.for_each(|line| info!("{}", line.unwrap()));
         Ok(())
     }
 

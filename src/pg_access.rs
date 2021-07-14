@@ -57,6 +57,7 @@ impl PgAccess {
     ///
     pub async fn new(fetch_settings: &PgFetchSettings, database_dir: &PathBuf) -> Result<Self, PgEmbedError> {
         let cache_dir = Self::create_cache_dir_structure(&fetch_settings).await?;
+        Self::create_db_dir_structure(database_dir).await?;
         let mut pg_ctl = cache_dir.clone();
         pg_ctl.push("bin/pg_ctl");
         let mut init_db = cache_dir.clone();
@@ -71,7 +72,7 @@ impl PgAccess {
         );
         zip_file_path.push(file_name);
         let mut pw_file = database_dir.clone();
-        pw_file.push("pwfile");
+        pw_file.set_extension("pwfile");
 
         Ok(
             PgAccess {
@@ -109,6 +110,10 @@ impl PgAccess {
         Ok(cache_pg_embed)
     }
 
+    async fn create_db_dir_structure(db_dir: &PathBuf) -> Result<(), PgEmbedError> {
+        tokio::fs::create_dir_all(db_dir).map_err(|e| PgEmbedError::DirCreationError(e)).await
+    }
+
     ///
     /// Check if postgresql executables are already cached
     ///
@@ -117,10 +122,23 @@ impl PgAccess {
     }
 
     ///
-    /// Check if database directory exists
+    /// Check if database files exist
     ///
-    pub async fn database_dir_exists(&self) -> Result<bool, PgEmbedError> {
-        Self::path_exists(self.database_dir.as_path()).await
+    pub async fn db_files_exist(&self) -> Result<bool, PgEmbedError> {
+        let mut res = tokio::fs::read_dir(self.database_dir.as_path())
+            .map_err(|e| PgEmbedError::ReadFileError(e))
+            .await?;
+        let mut file_count = 0;
+        while let Some(t) = res.next_entry()
+            .map_err(|e| PgEmbedError::ReadFileError(e))
+            .await? {
+            file_count = file_count + 1;
+        }
+        if file_count > 2 {
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 
     ///
@@ -248,7 +266,7 @@ impl PgAccess {
     ///
     pub fn init_db_command(&self, database_dir: &PathBuf, user: &str, auth_method: &PgAuthMethod) -> Box<Cell<Command>> {
         let init_db_executable = self.init_db_exe.to_str().unwrap();
-        let password_file_arg = format!("--pwfile={}", self.zip_file_path.to_str().unwrap());
+        let password_file_arg = format!("--pwfile={}", self.pw_file_path.to_str().unwrap());
         let auth_host =
             match auth_method {
                 PgAuthMethod::Plain => {
@@ -309,6 +327,24 @@ impl PgAccess {
             Box::new(
                 Cell::new(
                     tokio::process::Command::new(pg_ctl_executable)
+                )
+            );
+        command.get_mut()
+            .args(&[
+                "stop", "-w", "-D", database_dir.to_str().unwrap(),
+            ]);
+        command
+    }
+
+    ///
+    /// Create synchronous pg_ctl stop command
+    ///
+    pub fn stop_db_command_sync(&self, database_dir: &PathBuf) -> Box<Cell<std::process::Command>> {
+        let pg_ctl_executable = self.pg_ctl_exe.to_str().unwrap();
+        let mut command =
+            Box::new(
+                Cell::new(
+                    std::process::Command::new(pg_ctl_executable)
                 )
             );
         command.get_mut()

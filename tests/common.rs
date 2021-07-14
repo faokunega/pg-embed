@@ -18,7 +18,7 @@ pub async fn setup(port: i16, database_dir: PathBuf) -> Result<PgEmbed, PgEmbedE
         user: "postgres".to_string(),
         password: "password".to_string(),
         auth_method: PgAuthMethod::MD5,
-        persistent: true,
+        persistent: false,
         timeout: Duration::from_secs(20),
         migration_dir: None,
     };
