@@ -1,13 +1,15 @@
-#[cfg(feature = "sqlx_tokio")]
-use sqlx_tokio::{Connection, PgConnection};
-#[cfg(feature = "sqlx_async_std")]
-use sqlx_async_std::{Connection, PgConnection};
+use std::env;
+use std::path::PathBuf;
+
+use serial_test::serial;
+
+use pg_embed::pg_errors::PgEmbedError;
 #[cfg(feature = "sqlx_actix")]
 use sqlx_actix::{Connection, PgConnection};
-use serial_test::serial;
-use pg_embed::pg_errors::PgEmbedError;
-use std::path::PathBuf;
-use std::env;
+#[cfg(feature = "sqlx_async_std")]
+use sqlx_async_std::{Connection, PgConnection};
+#[cfg(feature = "sqlx_tokio")]
+use sqlx_tokio::{Connection, PgConnection};
 
 mod common;
 

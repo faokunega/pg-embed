@@ -1,7 +1,9 @@
 use std::path::PathBuf;
-use crate::pg_errors::PgEmbedError;
+
 use archiver_rs::{Archive, Compressed};
 use futures::TryFutureExt;
+
+use crate::pg_errors::PgEmbedError;
 
 ///
 /// Unzip the postgresql txz file

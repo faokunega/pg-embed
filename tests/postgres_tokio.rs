@@ -1,12 +1,13 @@
-use pg_embed::pg_errors::PgEmbedError;
-use serial_test::serial;
 use std::path::PathBuf;
-use pg_embed::pg_enums::PgServerStatus;
-use pg_embed::pg_access::PgAccess;
-use pg_embed::postgres::PgEmbed;
-use std::borrow::BorrowMut;
-use futures::{future, StreamExt};
+
+use futures::stream::{self, StreamExt};
+use serial_test::serial;
 use tokio::sync::Mutex;
+
+use pg_embed::pg_access::PgAccess;
+use pg_embed::pg_enums::PgServerStatus;
+use pg_embed::pg_errors::PgEmbedError;
+use pg_embed::postgres::PgEmbed;
 
 mod common;
 

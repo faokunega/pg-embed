@@ -4,36 +4,38 @@
 //! Start, stop, initialize the postgresql server.
 //! Create database clusters and databases.
 //!
-use futures::{TryFutureExt, StreamExt};
-use std::process::{Command, Stdio, ExitStatus};
-use crate::{pg_fetch, pg_unpack};
-use crate::pg_errors::PgEmbedError;
+use io::{Error, ErrorKind};
+use std::{io, thread};
+use std::collections::HashMap;
+use std::io::BufRead;
+use std::path::PathBuf;
+use std::process::{Command, ExitStatus, Stdio};
+use std::sync::Arc;
+use std::time::Duration;
+
+use futures::{StreamExt, TryFutureExt};
+use log::{error, info};
+use tokio::io::{AsyncBufReadExt, BufReader};
 #[cfg(any(feature = "rt_tokio", feature = "rt_tokio_migrate"))]
 use tokio::io::AsyncWriteExt;
+use tokio::process::Child;
+use tokio::runtime::Handle;
+use tokio::sync::Mutex;
+use tokio::task;
+use tokio::time::error::Elapsed;
+use tokio::time::timeout;
+
+#[cfg(feature = "rt_tokio_migrate")]
+use sqlx_tokio::migrate::{MigrateDatabase, Migrator};
 #[cfg(feature = "rt_tokio_migrate")]
 use sqlx_tokio::Postgres;
 #[cfg(feature = "rt_tokio_migrate")]
 use sqlx_tokio::postgres::PgPoolOptions;
-use std::time::Duration;
-#[cfg(feature = "rt_tokio_migrate")]
-use sqlx_tokio::migrate::{Migrator, MigrateDatabase};
-use tokio::task;
-use tokio::time::timeout;
-use std::path::PathBuf;
-use std::{io, thread};
-use io::{Error, ErrorKind};
-use log::{info, error};
-use crate::pg_access::PgAccess;
-use tokio::time::error::Elapsed;
-use tokio::io::{BufReader, AsyncBufReadExt};
-use tokio::process::Child;
-use crate::pg_enums::{PgAuthMethod, PgServerStatus, PgProcessType, PgAcquisitionStatus};
-use tokio::sync::Mutex;
-use std::sync::Arc;
-use std::collections::HashMap;
-use tokio::runtime::Handle;
-use std::io::BufRead;
 
+use crate::{pg_fetch, pg_unpack};
+use crate::pg_access::PgAccess;
+use crate::pg_enums::{PgAcquisitionStatus, PgAuthMethod, PgProcessType, PgServerStatus};
+use crate::pg_errors::PgEmbedError;
 
 ///
 /// Database settings

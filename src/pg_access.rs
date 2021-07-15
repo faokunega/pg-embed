@@ -2,27 +2,25 @@
 //! Cache postgresql files, access to executables, clean up files
 //!
 
-use std::path::{PathBuf, Path};
+use std::cell::Cell;
+use std::collections::HashMap;
+use std::io::{Error, ErrorKind};
+use std::ops::Deref;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
-use crate::pg_errors::PgEmbedError;
+use futures::future::BoxFuture;
 use futures::TryFutureExt;
 use tokio::io::AsyncWriteExt;
-use crate::postgres::PgSettings;
-use crate::pg_fetch::PgFetchSettings;
-use std::io::{Error, ErrorKind};
-use crate::pg_errors::PgEmbedError::PgPurgeFailure;
-use std::cell::Cell;
 use tokio::process::Command;
-use crate::pg_enums::{PgAuthMethod, OperationSystem, PgAcquisitionStatus};
-use std::sync::Arc;
 use tokio::sync::Mutex;
-use std::collections::HashMap;
-use std::ops::Deref;
-use tokio::time::{sleep, Duration, interval};
-use futures::future::BoxFuture;
+use tokio::time::{Duration, interval, sleep};
 
-
-
+use crate::pg_enums::{OperationSystem, PgAcquisitionStatus, PgAuthMethod};
+use crate::pg_errors::PgEmbedError;
+use crate::pg_errors::PgEmbedError::PgPurgeFailure;
+use crate::pg_fetch::PgFetchSettings;
+use crate::postgres::PgSettings;
 
 lazy_static! {
     ///

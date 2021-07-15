@@ -130,7 +130,9 @@
 //! Reliant on the great work being done by [zonkyio/embedded-postgres-binaries](https://github.com/zonkyio/embedded-postgres-binaries) in order to fetch precompiled binaries from [Maven](https://mvnrepository.com/artifact/io.zonky.test.postgres/embedded-postgres-binaries-bom).
 //!
 
-#[cfg(not(any(
+extern crate dirs;
+#[macro_use]
+extern crate lazy_static;#[cfg(not(any(
 feature = "rt_tokio_migrate",
 feature = "rt_tokio",
 feature = "rt_actix_migrate",
@@ -155,12 +157,9 @@ compile_error!(
      'rt_async_std', 'rt_async_std_migrate'] can be enabled"
 );
 
-extern crate dirs;
 pub mod pg_fetch;
 pub mod postgres;
 pub mod pg_access;
 pub mod pg_enums;
 pub mod pg_unpack;
 pub mod pg_errors;
-#[macro_use]
-extern crate lazy_static;
