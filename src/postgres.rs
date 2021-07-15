@@ -310,7 +310,7 @@ impl PgEmbed {
     }
 
     ///
-    /// Check database existance
+    /// Check database existence
     ///
     #[cfg(any(feature = "rt_tokio_migrate", feature = "rt_async_std_migrate", feature = "rt_actix_migrate"))]
     pub async fn database_exists(&self, db_name: &str) -> Result<bool, PgEmbedError> {

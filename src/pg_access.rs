@@ -47,6 +47,9 @@ pub struct PgAccess {
     pub pw_file_path: PathBuf,
     /// Postgresql binaries zip file path
     pub zip_file_path: PathBuf,
+    /// Postgresql database version file
+    /// used for internal checks
+    pg_version_file: PathBuf,
 }
 
 impl PgAccess {
@@ -73,6 +76,8 @@ impl PgAccess {
         zip_file_path.push(file_name);
         let mut pw_file = database_dir.clone();
         pw_file.set_extension("pwfile");
+        let mut pg_version_file = database_dir.clone();
+        pg_version_file.push("PG_VERSION");
 
         Ok(
             PgAccess {
@@ -82,6 +87,7 @@ impl PgAccess {
                 init_db_exe: init_db,
                 pw_file_path: pw_file,
                 zip_file_path,
+                pg_version_file
             }
         )
     }
@@ -125,20 +131,7 @@ impl PgAccess {
     /// Check if database files exist
     ///
     pub async fn db_files_exist(&self) -> Result<bool, PgEmbedError> {
-        let mut res = tokio::fs::read_dir(self.database_dir.as_path())
-            .map_err(|e| PgEmbedError::ReadFileError(e))
-            .await?;
-        let mut file_count = 0;
-        while let Some(t) = res.next_entry()
-            .map_err(|e| PgEmbedError::ReadFileError(e))
-            .await? {
-            file_count = file_count + 1;
-        }
-        if file_count > 2 {
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        Self::path_exists(self.pg_version_file.as_path()).await
     }
 
     ///

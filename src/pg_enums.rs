@@ -16,7 +16,7 @@ pub enum PgAuthMethod {
 ///
 /// Postgresql server status
 ///
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum PgServerStatus {
     /// Postgres uninitialized
     Uninitialized,
