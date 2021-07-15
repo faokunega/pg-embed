@@ -55,7 +55,7 @@ async fn postgres_server_multiple_concurrent() -> Result<(), PgEmbedError> {
 
 #[tokio::test]
 #[serial]
-async fn postgres_server_persistent() -> Result<(), PgEmbedError> {
+async fn postgres_server_persistent_true() -> Result<(), PgEmbedError> {
     let mut db_path = PathBuf::from("data_test/db");
     let mut database_dir = PathBuf::new();
     let mut pw_file_path = PathBuf::new();
@@ -76,6 +76,26 @@ async fn postgres_server_persistent() -> Result<(), PgEmbedError> {
 
     common::clean_up(database_dir, pw_file_path).await?;
 
+    let file_exists = common::pg_version_file_exists(&db_path).await?;
+    assert_eq!(false, file_exists);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn postgres_server_persistent_false() -> Result<(), PgEmbedError> {
+    let mut db_path = PathBuf::from("data_test/db");
+    {
+        let mut pg = common::setup(
+            5432,
+            db_path.clone(),
+            false,
+            None,
+        ).await?;
+        let file_exists = common::pg_version_file_exists(&db_path).await?;
+        assert_eq!(true, file_exists);
+    }
     let file_exists = common::pg_version_file_exists(&db_path).await?;
     assert_eq!(false, file_exists);
 
