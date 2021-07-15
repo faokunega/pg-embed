@@ -36,7 +36,7 @@
 //!
 //! # Examples
 //!
-//! ```
+//! ```rust, ignore
 //!
 //! use pg_embed::postgres::{PgEmbed, PgSettings, PgAuthMethod};
 //! use pg_embed::pg_fetch;

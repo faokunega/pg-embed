@@ -3,17 +3,10 @@
 //!
 //! Download and unpack postgresql binaries
 //!
-use std::borrow::Borrow;
-use std::path::{Path, PathBuf};
 
-use archiver_rs::{
-    Archive, Compressed,
-};
 use bytes::Bytes;
 use futures::TryFutureExt;
-use futures::future::BoxFuture;
 use reqwest::Response;
-use tokio::io::AsyncWriteExt;
 
 use crate::pg_enums::{Architecture, OperationSystem};
 use crate::pg_errors::PgEmbedError;
@@ -92,7 +85,7 @@ impl PgFetchSettings {
             version,
             &platform,
             version);
-        let mut response: Response =
+        let response: Response =
             reqwest::get(download_url).map_err(|e|
                 { PgEmbedError::DownloadFailure(e) })
                 .await?;

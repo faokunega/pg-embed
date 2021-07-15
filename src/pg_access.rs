@@ -5,22 +5,18 @@
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::io::{Error, ErrorKind};
-use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use futures::future::BoxFuture;
 use futures::TryFutureExt;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use tokio::sync::Mutex;
-use tokio::time::{Duration, interval, sleep};
+use tokio::time::{Duration, interval};
 
 use crate::pg_enums::{OperationSystem, PgAcquisitionStatus, PgAuthMethod};
 use crate::pg_errors::PgEmbedError;
-use crate::pg_errors::PgEmbedError::PgPurgeFailure;
 use crate::pg_fetch::PgFetchSettings;
-use crate::postgres::PgSettings;
 
 lazy_static! {
     ///

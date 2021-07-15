@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use futures::stream::{self, StreamExt};
+use futures::stream::StreamExt;
 use serial_test::serial;
 use tokio::sync::Mutex;
 
@@ -29,7 +29,7 @@ async fn postgres_server_start_stop() -> Result<(), PgEmbedError> {
 #[tokio::test]
 #[serial]
 async fn postgres_server_drop() -> Result<(), PgEmbedError> {
-    let mut db_path = PathBuf::from("data_test/db");
+    let db_path = PathBuf::from("data_test/db");
     {
         let mut pg = common::setup(5432, db_path.clone(), false, None).await?;
         pg.start_db().await?;
@@ -54,9 +54,9 @@ async fn postgres_server_multiple_concurrent() -> Result<(), PgEmbedError> {
 
     let wrap_with_mutex =
         |val: Result<PgEmbed, PgEmbedError>|
-            val.map(|pg| tokio::sync::Mutex::new(pg)).unwrap();
+            val.map(|pg| Mutex::new(pg)).unwrap();
 
-    let mut pgs: Vec<tokio::sync::Mutex<PgEmbed>> =
+    let pgs: Vec<Mutex<PgEmbed>> =
         futures::future::join_all(tasks)
             .await
             .into_iter()
@@ -81,18 +81,18 @@ async fn postgres_server_multiple_concurrent() -> Result<(), PgEmbedError> {
 #[tokio::test]
 #[serial]
 async fn postgres_server_persistent_true() -> Result<(), PgEmbedError> {
-    let mut db_path = PathBuf::from("data_test/db");
+    let db_path = PathBuf::from("data_test/db");
     let mut database_dir = PathBuf::new();
     let mut pw_file_path = PathBuf::new();
     {
-        let mut pg = common::setup(
+        let pg = common::setup(
             5432,
             db_path.clone(),
             true,
             None,
         ).await?;
-        database_dir = pg.pg_access.database_dir.clone();
-        pw_file_path = pg.pg_access.pw_file_path.clone();
+        database_dir.clone_from(&pg.pg_access.database_dir);
+        pw_file_path.clone_from(&pg.pg_access.pw_file_path);
         let file_exists = common::pg_version_file_exists(&db_path).await?;
         assert_eq!(true, file_exists);
     }
@@ -110,9 +110,9 @@ async fn postgres_server_persistent_true() -> Result<(), PgEmbedError> {
 #[tokio::test]
 #[serial]
 async fn postgres_server_persistent_false() -> Result<(), PgEmbedError> {
-    let mut db_path = PathBuf::from("data_test/db");
+    let db_path = PathBuf::from("data_test/db");
     {
-        let mut pg = common::setup(
+        let _pg = common::setup(
             5432,
             db_path.clone(),
             false,

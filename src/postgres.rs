@@ -5,23 +5,15 @@
 //! Create database clusters and databases.
 //!
 use io::{Error, ErrorKind};
-use std::{io, thread};
-use std::collections::HashMap;
+use std::io;
 use std::io::BufRead;
 use std::path::PathBuf;
-use std::process::{Command, ExitStatus, Stdio};
-use std::sync::Arc;
+use std::process::{ExitStatus, Stdio};
 use std::time::Duration;
 
-use futures::{StreamExt, TryFutureExt};
 use log::{error, info};
 use tokio::io::{AsyncBufReadExt, BufReader};
-#[cfg(any(feature = "rt_tokio", feature = "rt_tokio_migrate"))]
-use tokio::io::AsyncWriteExt;
 use tokio::process::Child;
-use tokio::runtime::Handle;
-use tokio::sync::Mutex;
-use tokio::task;
 use tokio::time::error::Elapsed;
 use tokio::time::timeout;
 
@@ -34,7 +26,7 @@ use sqlx_tokio::postgres::PgPoolOptions;
 
 use crate::{pg_fetch, pg_unpack};
 use crate::pg_access::PgAccess;
-use crate::pg_enums::{PgAcquisitionStatus, PgAuthMethod, PgProcessType, PgServerStatus};
+use crate::pg_enums::{PgAuthMethod, PgProcessType, PgServerStatus};
 use crate::pg_errors::PgEmbedError;
 
 ///
@@ -84,7 +76,7 @@ pub struct PgEmbed {
 impl Drop for PgEmbed {
     fn drop(&mut self) {
         if self.server_status != PgServerStatus::Stopped {
-            self.stop_db_sync();
+            let _ = self.stop_db_sync();
         }
         if !&self.pg_settings.persistent {
             let _ = &self.pg_access.clean();
@@ -288,10 +280,10 @@ impl PgEmbed {
     /// Handle process logging synchronous
     ///
     pub fn handle_process_io_sync(&self, process: &mut std::process::Child) -> Result<(), PgEmbedError> {
-        let mut reader_out = std::io::BufReader::new(process.stdout.take().unwrap()).lines();
-        let mut reader_err = std::io::BufReader::new(process.stderr.take().unwrap()).lines();
+        let reader_out = std::io::BufReader::new(process.stdout.take().unwrap()).lines();
+        let reader_err = std::io::BufReader::new(process.stderr.take().unwrap()).lines();
         reader_out.for_each(|line| info!("{}", line.unwrap()));
-        reader_err.for_each(|line| info!("{}", line.unwrap()));
+        reader_err.for_each(|line| error!("{}", line.unwrap()));
         Ok(())
     }
 

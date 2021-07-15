@@ -79,7 +79,7 @@ pub async fn unpack_postgres(
     let txz_file_path = unzip_txz(&zip_file_path, &cache_dir)?;
     let tar_file_path = decompress_xz(&txz_file_path)?;
     tokio::fs::remove_file(txz_file_path).map_err(|e| PgEmbedError::PgCleanUpFailure(e)).await?;
-    decompress_tar(&tar_file_path, &cache_dir);
+    let _ = decompress_tar(&tar_file_path, &cache_dir);
     tokio::fs::remove_file(tar_file_path).map_err(|e| PgEmbedError::PgCleanUpFailure(e)).await?;
     Ok(())
 }
