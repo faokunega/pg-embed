@@ -3,6 +3,9 @@ use serial_test::serial;
 use std::path::PathBuf;
 use pg_embed::pg_enums::PgServerStatus;
 use pg_embed::pg_access::PgAccess;
+use futures::TryFutureExt;
+use pg_embed::postgres::PgEmbed;
+use std::borrow::BorrowMut;
 
 mod common;
 
@@ -37,21 +40,34 @@ async fn postgres_server_drop() -> Result<(), PgEmbedError> {
 #[serial]
 async fn postgres_server_multiple_concurrent() -> Result<(), PgEmbedError> {
     PgAccess::purge().await?;
-    let mut pg1 = common::setup(5432, PathBuf::from("data_test/db1"), false, None).await?;
-    let mut pg2 = common::setup(5433, PathBuf::from("data_test/db2"), false, None).await?;
-    let mut pg3 = common::setup(5434, PathBuf::from("data_test/db3"), false, None).await?;
-    pg1.start_db().await?;
-    assert_eq!(pg1.server_status, PgServerStatus::Started);
-    pg2.start_db().await?;
-    assert_eq!(pg2.server_status, PgServerStatus::Started);
-    pg3.start_db().await?;
-    assert_eq!(pg3.server_status, PgServerStatus::Started);
-    pg1.stop_db().await?;
-    assert_eq!(pg1.server_status, PgServerStatus::Stopped);
-    pg2.stop_db().await?;
-    assert_eq!(pg2.server_status, PgServerStatus::Stopped);
-    pg3.stop_db().await?;
-    assert_eq!(pg3.server_status, PgServerStatus::Stopped);
+    // let mut pg1 = common::setup(5432, PathBuf::from("data_test/db1"), false, None).await?;
+    // let mut pg2 = common::setup(5433, PathBuf::from("data_test/db2"), false, None).await?;
+    // let mut pg3 = common::setup(5434, PathBuf::from("data_test/db3"), false, None).await?;
+    let tasks = vec![
+        tokio::spawn(async move { common::setup(5432, PathBuf::from("data_test/db1"), false, None).await }),
+        tokio::spawn(async move { common::setup(5433, PathBuf::from("data_test/db2"), false, None).await }),
+        tokio::spawn(async move { common::setup(5434, PathBuf::from("data_test/db3"), false, None).await }),
+    ];
+
+    let mut pgs: Vec<PgEmbed> =
+        futures::future::join_all(tasks)
+            .await
+            .into_iter()
+            .map(|val| val.map_err(|e| PgEmbedError::PgLockError()).unwrap().unwrap())
+            .collect();
+
+    pgs.get_mut(0).unwrap().start_db().await?;
+    assert_eq!(pgs.get(0).unwrap().server_status, PgServerStatus::Started);
+    pgs.get_mut(1).unwrap().start_db().await?;
+    assert_eq!(pgs.get(1).unwrap().server_status, PgServerStatus::Started);
+    pgs.get_mut(2).unwrap().start_db().await?;
+    assert_eq!(pgs.get(2).unwrap().server_status, PgServerStatus::Started);
+    pgs.get_mut(0).unwrap().stop_db().await?;
+    assert_eq!(pgs.get(0).unwrap().server_status, PgServerStatus::Stopped);
+    pgs.get_mut(1).unwrap().stop_db().await?;
+    assert_eq!(pgs.get(1).unwrap().server_status, PgServerStatus::Stopped);
+    pgs.get_mut(2).unwrap().stop_db().await?;
+    assert_eq!(pgs.get(2).unwrap().server_status, PgServerStatus::Stopped);
     Ok(())
 }
 

@@ -149,7 +149,7 @@ impl Default for Architecture {
 }
 
 /// The postgresql binaries acquisition status
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum PgAcquisitionStatus{
     /// Acquiring postgresql binaries
     InProgress,

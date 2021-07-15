@@ -18,8 +18,9 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use std::collections::HashMap;
 use std::ops::Deref;
-use tokio::time::{sleep, Duration};
+use tokio::time::{sleep, Duration, interval};
 use futures::future::BoxFuture;
+
 
 
 
@@ -197,8 +198,11 @@ impl PgAccess {
         if !self.pg_executables_cached().await? {
             match self.acquisition_status().await {
                 PgAcquisitionStatus::InProgress => {
-                    // TODO: wait until acquisition is finished and do not return error
-                    Err(PgEmbedError::PgLockError())
+                    let mut interval = interval(Duration::from_millis(10));
+                    while self.acquisition_status().await == PgAcquisitionStatus::InProgress {
+                        interval.tick().await;
+                    }
+                    Ok(false)
                 }
                 PgAcquisitionStatus::Finished => {
                     Ok(false)
@@ -239,7 +243,7 @@ impl PgAccess {
     ///
     /// Purge postgresql executables
     ///
-    /// Remove cached postgresql executables
+    /// Remove all cached postgresql executables
     ///
     pub async fn purge() -> Result<(), PgEmbedError> {
         let mut cache_dir = dirs::cache_dir().ok_or_else(
