@@ -33,6 +33,8 @@ lazy_static! {
     static ref ACQUIRED_PG_BINS: Arc<Mutex<HashMap<PathBuf, PgAcquisitionStatus>>> = Arc::new(Mutex::new(HashMap::with_capacity(5)));
 }
 
+const PG_EMBED_CACHE_DIR_NAME: &'static str = "pg-embed";
+
 ///
 /// Access to pg_ctl, initdb, database directory and cache directory
 ///
@@ -108,7 +110,7 @@ impl PgAccess {
             OperationSystem::Darwin | OperationSystem::Windows | OperationSystem::Linux => fetch_settings.operating_system.to_string(),
             OperationSystem::AlpineLinux => format!("arch_{}", fetch_settings.operating_system.to_string())
         };
-        let pg_path = format!("pg-embed/{}/{}/{}", os_string, fetch_settings.architecture.to_string(), fetch_settings.version.0);
+        let pg_path = format!("{}/{}/{}/{}", PG_EMBED_CACHE_DIR_NAME, os_string, fetch_settings.architecture.to_string(), fetch_settings.version.0);
         let mut cache_pg_embed = cache_dir.clone();
         cache_pg_embed.push(pg_path);
         tokio::fs::create_dir_all(
@@ -243,7 +245,7 @@ impl PgAccess {
         let mut cache_dir = dirs::cache_dir().ok_or_else(
             || PgEmbedError::ReadFileError(Error::new(ErrorKind::Other, "cache dir error"))
         )?;
-        cache_dir.push("pg-embed");
+        cache_dir.push(PG_EMBED_CACHE_DIR_NAME);
         let _ = tokio::fs::remove_dir_all(cache_dir.as_path()).map_err(|e| PgEmbedError::PgPurgeFailure(e)).await;
         Ok(())
     }
