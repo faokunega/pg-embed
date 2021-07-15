@@ -45,9 +45,11 @@ async fn db_migration() -> Result<(), PgEmbedError> {
         .execute(&mut conn)
         .await?;
 
-    let row = sqlx_tokio::query("SELECT id, description, done FROM testing LIMIT 1")
-        .fetch_one(&mut conn)
+    let rows = sqlx_tokio::query("SELECT * FROM testing")
+        .fetch_all(&mut conn)
         .await?;
+
+    assert_eq!(1, rows.len());
 
     Ok(())
 }
