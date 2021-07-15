@@ -124,7 +124,9 @@ impl PgEmbed {
             self.acquire_postgres().await?;
         }
         self.pg_access.create_password_file(self.pg_settings.password.as_bytes()).await?;
-        if !self.pg_access.db_files_exist().await? {
+        if self.pg_access.db_files_exist().await? {
+            self.server_status = PgServerStatus::Initialized;
+        } else {
             &self.init_db().await?;
         }
         Ok(())

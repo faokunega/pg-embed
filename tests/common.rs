@@ -47,3 +47,13 @@ pub async fn pg_version_file_exists(db_dir: &PathBuf) -> Result<bool, PgEmbedErr
         };
     Ok(file_exists)
 }
+
+pub async fn clean_up(database_dir: PathBuf, pw_file: PathBuf) -> Result<(), PgEmbedError> {
+    tokio::fs::remove_dir_all(database_dir.as_path())
+        .await
+        .map_err(|e| PgEmbedError::PgCleanUpFailure(e))?;
+
+    tokio::fs::remove_file(pw_file.as_path())
+        .await
+        .map_err(|e| PgEmbedError::PgCleanUpFailure(e))
+}
