@@ -54,9 +54,7 @@ async fn postgres_server_multiple_concurrent() -> Result<(), PgEmbedError> {
 
     let wrap_with_mutex =
         |val: Result<PgEmbed, PgEmbedError>|
-            val.map_err(|e| PgEmbedError::PgLockError())
-                .map(|pg| tokio::sync::Mutex::new(pg))
-                .unwrap();
+            val.map(|pg| tokio::sync::Mutex::new(pg)).unwrap();
 
     let mut pgs: Vec<tokio::sync::Mutex<PgEmbed>> =
         futures::future::join_all(tasks)
@@ -70,7 +68,8 @@ async fn postgres_server_multiple_concurrent() -> Result<(), PgEmbedError> {
         let _ = pg.start_db().await;
         assert_eq!(pg.server_status, PgServerStatus::Started);
     }).await;
-    futures::stream::iter(&pgs).for_each_concurrent(None, |pg| async move{
+
+    futures::stream::iter(&pgs).for_each_concurrent(None, |pg| async move {
         let mut pg = pg.lock().await;
         let _ = pg.stop_db().await;
         assert_eq!(pg.server_status, PgServerStatus::Stopped);
