@@ -1,3 +1,8 @@
+# v0.5.3
+___
+### Fix
+- Fixed: Concurrent PgEmbed instances trying to acquire pg resources simultaneously
+
 # v0.5.2
 ___
 ### Fix
