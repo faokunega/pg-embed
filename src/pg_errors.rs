@@ -1,3 +1,6 @@
+//!
+//! Errors
+//!
 use thiserror::Error;
 
 ///

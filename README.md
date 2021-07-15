@@ -84,7 +84,7 @@ will be available soon.
      // to enable migrations view the [Usage] section for details
      pg.create_database("database_name").await;
 
-     // drop a new database
+     // drop a database
      // to enable migrations view [Usage] for details
      pg.drop_database("database_name").await;
 

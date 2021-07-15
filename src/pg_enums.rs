@@ -1,3 +1,7 @@
+//!
+//! Enums
+//!
+
 ///
 /// Postgresql authentication method
 ///

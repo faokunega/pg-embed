@@ -73,33 +73,33 @@
 //!
 //! /// async block only to show that these methods need to be executed in an async context
 //! async {
-//! // Create a new instance
-//! let mut pg = PgEmbed::new(pg_settings, fetch_settings).await?;
+//!      // Create a new instance
+//!      let mut pg = PgEmbed::new(pg_settings, fetch_settings).await?;
 //!
-//! // Download, unpack, create password file and database cluster
-//! pg.setup().await;
+//!      // Download, unpack, create password file and database cluster
+//!      pg.setup().await;
 //!
-//! // start postgresql database
-//! pg.start_db().await;
+//!      // start postgresql database
+//!      pg.start_db().await;
 //!
-//! // create a new database
-//! // to enable migrations view the [Usage] section for details
-//! pg.create_database("database_name").await;
+//!      // create a new database
+//!      // to enable migrations view the [Usage] section for details
+//!      pg.create_database("database_name").await;
 //!
-//! // drop a new database
-//! // to enable migrations view [Usage] for details
-//! pg.drop_database("database_name").await;
+//!      // drop a database
+//!      // to enable migrations view [Usage] for details
+//!      pg.drop_database("database_name").await;
 //!
-//! // check database existence
-//! // to enable migrations view [Usage] for details
-//! pg.database_exists("database_name").await;
+//!      // check database existence
+//!      // to enable migrations view [Usage] for details
+//!      pg.database_exists("database_name").await;
 //!
-//! // run migration sql scripts
-//! // to enable migrations view [Usage] for details
-//! pg.migrate("database_name").await;
+//!      // run migration sql scripts
+//!      // to enable migrations view [Usage] for details
+//!      pg.migrate("database_name").await;
 //!
-//! // stop postgresql database
-//! pg.stop_db().await;
+//!      // stop postgresql database
+//!      pg.stop_db().await;
 //! };
 //! // get the base postgresql uri
 //! // `postgres://{username}:{password}@localhost:{port}`

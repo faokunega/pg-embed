@@ -1,3 +1,6 @@
+//!
+//! Unpack postgresql binaries
+//!
 use std::path::PathBuf;
 
 use archiver_rs::{Archive, Compressed};
