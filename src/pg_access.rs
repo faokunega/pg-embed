@@ -18,6 +18,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use std::collections::HashMap;
 use std::ops::Deref;
+use tokio::time::{sleep, Duration};
+use futures::future::BoxFuture;
 
 
 
@@ -237,8 +239,13 @@ impl PgAccess {
     ///
     /// Remove cached postgresql executables
     ///
-    async fn purge(&self) -> Result<(), PgEmbedError> {
-        tokio::fs::remove_dir_all(self.cache_dir.as_path()).map_err(|e| PgEmbedError::PgPurgeFailure(e)).await
+    pub async fn purge() -> Result<(), PgEmbedError> {
+        let mut cache_dir = dirs::cache_dir().ok_or_else(
+            || PgEmbedError::ReadFileError(Error::new(ErrorKind::Other, "cache dir error"))
+        )?;
+        cache_dir.push("pg-embed");
+        let _ = tokio::fs::remove_dir_all(cache_dir.as_path()).map_err(|e| PgEmbedError::PgPurgeFailure(e)).await;
+        Ok(())
     }
 
     ///

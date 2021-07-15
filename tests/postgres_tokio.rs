@@ -2,6 +2,7 @@ use pg_embed::pg_errors::PgEmbedError;
 use serial_test::serial;
 use std::path::PathBuf;
 use pg_embed::pg_enums::PgServerStatus;
+use pg_embed::pg_access::PgAccess;
 
 mod common;
 
@@ -35,6 +36,7 @@ async fn postgres_server_drop() -> Result<(), PgEmbedError> {
 #[tokio::test]
 #[serial]
 async fn postgres_server_multiple_concurrent() -> Result<(), PgEmbedError> {
+    PgAccess::purge().await?;
     let mut pg1 = common::setup(5432, PathBuf::from("data_test/db1"), false, None).await?;
     let mut pg2 = common::setup(5433, PathBuf::from("data_test/db2"), false, None).await?;
     let mut pg3 = common::setup(5434, PathBuf::from("data_test/db3"), false, None).await?;
