@@ -3,9 +3,10 @@ use serial_test::serial;
 use std::path::PathBuf;
 use pg_embed::pg_enums::PgServerStatus;
 use pg_embed::pg_access::PgAccess;
-use futures::TryFutureExt;
 use pg_embed::postgres::PgEmbed;
 use std::borrow::BorrowMut;
+use futures::{future, StreamExt};
+use tokio::sync::Mutex;
 
 mod common;
 
@@ -14,10 +15,13 @@ mod common;
 async fn postgres_server_start_stop() -> Result<(), PgEmbedError> {
     let mut pg = common::setup(5432, PathBuf::from("data_test/db"), false, None).await?;
     assert_eq!(pg.server_status, PgServerStatus::Initialized);
+
     pg.start_db().await?;
     assert_eq!(pg.server_status, PgServerStatus::Started);
+
     pg.stop_db().await?;
     assert_eq!(pg.server_status, PgServerStatus::Stopped);
+
     Ok(())
 }
 
@@ -40,34 +44,37 @@ async fn postgres_server_drop() -> Result<(), PgEmbedError> {
 #[serial]
 async fn postgres_server_multiple_concurrent() -> Result<(), PgEmbedError> {
     PgAccess::purge().await?;
-    // let mut pg1 = common::setup(5432, PathBuf::from("data_test/db1"), false, None).await?;
-    // let mut pg2 = common::setup(5433, PathBuf::from("data_test/db2"), false, None).await?;
-    // let mut pg3 = common::setup(5434, PathBuf::from("data_test/db3"), false, None).await?;
+
     let tasks = vec![
-        tokio::spawn(async move { common::setup(5432, PathBuf::from("data_test/db1"), false, None).await }),
-        tokio::spawn(async move { common::setup(5433, PathBuf::from("data_test/db2"), false, None).await }),
-        tokio::spawn(async move { common::setup(5434, PathBuf::from("data_test/db3"), false, None).await }),
+        common::setup(5432, PathBuf::from("data_test/db1"), false, None),
+        common::setup(5433, PathBuf::from("data_test/db2"), false, None),
+        common::setup(5434, PathBuf::from("data_test/db3"), false, None),
     ];
 
-    let mut pgs: Vec<PgEmbed> =
+    let wrap_with_mutex =
+        |val: Result<PgEmbed, PgEmbedError>|
+            val.map_err(|e| PgEmbedError::PgLockError())
+                .map(|pg| tokio::sync::Mutex::new(pg))
+                .unwrap();
+
+    let mut pgs: Vec<tokio::sync::Mutex<PgEmbed>> =
         futures::future::join_all(tasks)
             .await
             .into_iter()
-            .map(|val| val.map_err(|e| PgEmbedError::PgLockError()).unwrap().unwrap())
+            .map(wrap_with_mutex)
             .collect();
 
-    pgs.get_mut(0).unwrap().start_db().await?;
-    assert_eq!(pgs.get(0).unwrap().server_status, PgServerStatus::Started);
-    pgs.get_mut(1).unwrap().start_db().await?;
-    assert_eq!(pgs.get(1).unwrap().server_status, PgServerStatus::Started);
-    pgs.get_mut(2).unwrap().start_db().await?;
-    assert_eq!(pgs.get(2).unwrap().server_status, PgServerStatus::Started);
-    pgs.get_mut(0).unwrap().stop_db().await?;
-    assert_eq!(pgs.get(0).unwrap().server_status, PgServerStatus::Stopped);
-    pgs.get_mut(1).unwrap().stop_db().await?;
-    assert_eq!(pgs.get(1).unwrap().server_status, PgServerStatus::Stopped);
-    pgs.get_mut(2).unwrap().stop_db().await?;
-    assert_eq!(pgs.get(2).unwrap().server_status, PgServerStatus::Stopped);
+    futures::stream::iter(&pgs).for_each_concurrent(None, |pg| async move {
+        let mut pg = pg.lock().await;
+        let _ = pg.start_db().await;
+        assert_eq!(pg.server_status, PgServerStatus::Started);
+    }).await;
+    futures::stream::iter(&pgs).for_each_concurrent(None, |pg| async move{
+        let mut pg = pg.lock().await;
+        let _ = pg.stop_db().await;
+        assert_eq!(pg.server_status, PgServerStatus::Stopped);
+    }).await;
+
     Ok(())
 }
 
