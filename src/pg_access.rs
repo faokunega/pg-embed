@@ -196,7 +196,7 @@ impl PgAccess {
         if !self.pg_executables_cached().await? {
             match self.acquisition_status().await {
                 PgAcquisitionStatus::InProgress => {
-                    let mut interval = interval(Duration::from_millis(20));
+                    let mut interval = interval(Duration::from_millis(100));
                     while self.acquisition_status().await == PgAcquisitionStatus::InProgress {
                         interval.tick().await;
                     }

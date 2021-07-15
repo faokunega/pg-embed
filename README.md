@@ -32,8 +32,6 @@ will be available soon.
      pg-embed = "0.5"
      ```
 
-A postgresql instance can be created using<br/>
-**[PgEmbed]( postgres::PgEmbed )::new([PgSettings]( postgres::PgSettings ), [PgFetchSettings]( fetch::PgFetchSettings ))**
 
 # Examples
 
@@ -112,6 +110,24 @@ A postgresql instance can be created using<br/>
 
 
  ```
+## Info
+
+The downloaded postgresql binaries are cached in the following directories:
+
+   - On Linux:
+
+     `$XDG_CACHE_HOME/pg-embed`
+
+     or
+
+     `$HOME/.cache/pg-embed`
+   - On Windows:
+
+     `{FOLDERID_LocalAppData}/pg-embed`
+   - On MacOS:
+
+     `$HOME/Library/Caches/pg-embed`
+
 
 ## Recent Breaking Changes
 
