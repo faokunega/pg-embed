@@ -226,31 +226,15 @@ impl PgEmbed {
     /// Get process error for corresponding process type
     ///
     fn process_type_failure(process_type: PgProcessType, exit_code: Option<i32>) -> PgEmbedError {
+        let error =
+            Error::new(
+                ErrorKind::Other,
+                format!("Postgresql {} command failure with exit status {:?}", process_type.to_string(), exit_code),
+            );
         match process_type {
-            PgProcessType::InitDb => {
-                PgEmbedError::PgInitFailure(
-                    Error::new(
-                        ErrorKind::Other,
-                        format!("Postgresql {} command failure with exit status {:?}", process_type.to_string(), exit_code),
-                    )
-                )
-            }
-            PgProcessType::StartDb => {
-                PgEmbedError::PgStartFailure(
-                    Error::new(
-                        ErrorKind::Other,
-                        format!("Postgresql {} command failure with exit status {:?}", process_type.to_string(), exit_code),
-                    )
-                )
-            }
-            PgProcessType::StopDb => {
-                PgEmbedError::PgStopFailure(
-                    Error::new(
-                        ErrorKind::Other,
-                        format!("Postgresql {} command failure with exit status {:?}", process_type.to_string(), exit_code),
-                    )
-                )
-            }
+            PgProcessType::InitDb => PgEmbedError::PgInitFailure(error),
+            PgProcessType::StartDb => PgEmbedError::PgStartFailure(error),
+            PgProcessType::StopDb => PgEmbedError::PgStopFailure(error),
         }
     }
 
