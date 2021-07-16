@@ -10,13 +10,13 @@ use std::sync::Arc;
 
 use futures::TryFutureExt;
 use tokio::io::AsyncWriteExt;
-use tokio::process::Command;
 use tokio::sync::Mutex;
 use tokio::time::{Duration, interval};
 
 use crate::pg_enums::{OperationSystem, PgAcquisitionStatus, PgAuthMethod};
 use crate::pg_errors::PgEmbedError;
 use crate::pg_fetch::PgFetchSettings;
+use crate::pg_types::{PgResult, PgCommandSync, PgCommand};
 
 lazy_static! {
     ///
@@ -25,7 +25,8 @@ lazy_static! {
     /// Used to prevent simultaneous downloads and unpacking of the same binaries
     /// while executing multiple PgEmbed instances concurrently.
     ///
-    static ref ACQUIRED_PG_BINS: Arc<Mutex<HashMap<PathBuf, PgAcquisitionStatus>>> = Arc::new(Mutex::new(HashMap::with_capacity(5)));
+    static ref ACQUIRED_PG_BINS: Arc<Mutex<HashMap<PathBuf, PgAcquisitionStatus>>> =
+    Arc::new(Mutex::new(HashMap::with_capacity(5)));
 }
 
 const PG_EMBED_CACHE_DIR_NAME: &'static str = "pg-embed";
@@ -97,7 +98,7 @@ impl PgAccess {
     ///
     /// Returns PathBuf(cache_directory) on success, an error otherwise
     ///
-    async fn create_cache_dir_structure(fetch_settings: &PgFetchSettings) -> Result<PathBuf, PgEmbedError> {
+    async fn create_cache_dir_structure(fetch_settings: &PgFetchSettings) -> PgResult<PathBuf> {
         let cache_dir =
             dirs::cache_dir().ok_or_else(
                 || PgEmbedError::DirCreationError(Error::new(ErrorKind::Other, "cache dir error"))
@@ -116,28 +117,28 @@ impl PgAccess {
         Ok(cache_pg_embed)
     }
 
-    async fn create_db_dir_structure(db_dir: &PathBuf) -> Result<(), PgEmbedError> {
+    async fn create_db_dir_structure(db_dir: &PathBuf) -> PgResult<()> {
         tokio::fs::create_dir_all(db_dir).map_err(|e| PgEmbedError::DirCreationError(e)).await
     }
 
     ///
     /// Check if postgresql executables are already cached
     ///
-    pub async fn pg_executables_cached(&self) -> Result<bool, PgEmbedError> {
+    pub async fn pg_executables_cached(&self) -> PgResult<bool> {
         Self::path_exists(self.init_db_exe.as_path()).await
     }
 
     ///
     /// Check if database files exist
     ///
-    pub async fn db_files_exist(&self) -> Result<bool, PgEmbedError> {
+    pub async fn db_files_exist(&self) -> PgResult<bool> {
         Self::path_exists(self.pg_version_file.as_path()).await
     }
 
     ///
     /// Check if database version file exists
     ///
-    pub async fn pg_version_file_exists(db_dir: &PathBuf) -> Result<bool, PgEmbedError> {
+    pub async fn pg_version_file_exists(db_dir: &PathBuf) -> PgResult<bool> {
         let mut pg_version_file = db_dir.clone();
         pg_version_file.push(PG_VERSION_FILE_NAME);
         let file_exists =
@@ -152,7 +153,7 @@ impl PgAccess {
     ///
     /// Check if file path exists
     ///
-    async fn path_exists(file: &Path) -> Result<bool, PgEmbedError> {
+    async fn path_exists(file: &Path) -> PgResult<bool> {
         if let Ok(_) = tokio::fs::File::open(file).await {
             Ok(true)
         } else {
@@ -166,7 +167,7 @@ impl PgAccess {
     /// Used while acquiring postgresql binaries, so that no two instances
     /// of PgEmbed try to acquire the same resources
     ///
-    pub async fn mark_acquisition_in_progress(&self) -> Result<(), PgEmbedError> {
+    pub async fn mark_acquisition_in_progress(&self) -> PgResult<()> {
         let mut lock = ACQUIRED_PG_BINS.lock().await;
         lock.insert(self.cache_dir.clone(), PgAcquisitionStatus::InProgress);
         Ok(())
@@ -178,7 +179,7 @@ impl PgAccess {
     /// Used when acquiring postgresql has finished, so that other instances
     /// of PgEmbed don't try to reacquire resources
     ///
-    pub async fn mark_acquisition_finished(&self) -> Result<(), PgEmbedError> {
+    pub async fn mark_acquisition_finished(&self) -> PgResult<()> {
         let mut lock = ACQUIRED_PG_BINS.lock().await;
         lock.insert(self.cache_dir.clone(), PgAcquisitionStatus::Finished);
         Ok(())
@@ -204,7 +205,7 @@ impl PgAccess {
     ///
     /// Determine if postgresql binaries acquisition is needed
     ///
-    pub async fn acquisition_needed(&self) -> Result<bool, PgEmbedError> {
+    pub async fn acquisition_needed(&self) -> PgResult<bool> {
         if !self.pg_executables_cached().await? {
             match self.acquisition_status().await {
                 PgAcquisitionStatus::InProgress => {
@@ -230,7 +231,7 @@ impl PgAccess {
     ///
     /// Write pg binaries zip to postgresql cache directory
     ///
-    pub async fn write_pg_zip(&self, bytes: &[u8]) -> Result<(), PgEmbedError> {
+    pub async fn write_pg_zip(&self, bytes: &[u8]) -> PgResult<()> {
         let mut file: tokio::fs::File =
             tokio::fs::File::create(&self.zip_file_path.as_path()).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
         file.write_all(&bytes).map_err(|e| PgEmbedError::WriteFileError(e))
@@ -243,7 +244,7 @@ impl PgAccess {
     ///
     /// Remove created directories containing the database and the password file.
     ///
-    pub fn clean(&self) -> Result<(), PgEmbedError> {
+    pub fn clean(&self) -> PgResult<()> {
         // not using tokio::fs async methods because clean() is called on drop
         std::fs::remove_dir_all(self.database_dir.as_path()).map_err(|e| PgEmbedError::PgCleanUpFailure(e))?;
         std::fs::remove_file(self.pw_file_path.as_path()).map_err(|e| PgEmbedError::PgCleanUpFailure(e))?;
@@ -255,7 +256,7 @@ impl PgAccess {
     ///
     /// Remove all cached postgresql executables
     ///
-    pub async fn purge() -> Result<(), PgEmbedError> {
+    pub async fn purge() -> PgResult<()> {
         let mut cache_dir = dirs::cache_dir().ok_or_else(
             || PgEmbedError::ReadFileError(Error::new(ErrorKind::Other, "cache dir error"))
         )?;
@@ -267,7 +268,7 @@ impl PgAccess {
     ///
     /// Clean up database directory and password file
     ///
-    pub async fn clean_up(database_dir: PathBuf, pw_file: PathBuf) -> Result<(), PgEmbedError> {
+    pub async fn clean_up(database_dir: PathBuf, pw_file: PathBuf) -> PgResult<()> {
         tokio::fs::remove_dir_all(database_dir.as_path())
             .await
             .map_err(|e| PgEmbedError::PgCleanUpFailure(e))?;
@@ -282,7 +283,7 @@ impl PgAccess {
     ///
     /// Returns `Ok(())` on success, otherwise returns an error.
     ///
-    pub async fn create_password_file(&self, password: &[u8]) -> Result<(), PgEmbedError> {
+    pub async fn create_password_file(&self, password: &[u8]) -> PgResult<()> {
         let mut file: tokio::fs::File = tokio::fs::File::create(self.pw_file_path.as_path()).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
         let _ = file
             .write(password).map_err(|e| PgEmbedError::WriteFileError(e))
@@ -293,7 +294,7 @@ impl PgAccess {
     ///
     /// Create initdb command
     ///
-    pub fn init_db_command(&self, database_dir: &PathBuf, user: &str, auth_method: &PgAuthMethod) -> Box<Cell<Command>> {
+    pub fn init_db_command(&self, database_dir: &PathBuf, user: &str, auth_method: &PgAuthMethod) -> PgCommand {
         let init_db_executable = self.init_db_exe.to_str().unwrap();
         let password_file_arg = format!("--pwfile={}", self.pw_file_path.to_str().unwrap());
         let auth_host =
@@ -331,7 +332,7 @@ impl PgAccess {
     ///
     /// Create pg_ctl start command
     ///
-    pub fn start_db_command(&self, database_dir: &PathBuf, port: i16) -> Box<Cell<Command>> {
+    pub fn start_db_command(&self, database_dir: &PathBuf, port: i16) -> PgCommand {
         let pg_ctl_executable = self.pg_ctl_exe.to_str().unwrap();
         let port_arg = format!("-F -p {}", port.to_string());
         let mut command =
@@ -350,7 +351,7 @@ impl PgAccess {
     ///
     /// Create pg_ctl stop command
     ///
-    pub fn stop_db_command(&self, database_dir: &PathBuf) -> Box<Cell<Command>> {
+    pub fn stop_db_command(&self, database_dir: &PathBuf) -> PgCommand {
         let pg_ctl_executable = self.pg_ctl_exe.to_str().unwrap();
         let mut command =
             Box::new(
@@ -368,7 +369,7 @@ impl PgAccess {
     ///
     /// Create synchronous pg_ctl stop command
     ///
-    pub fn stop_db_command_sync(&self, database_dir: &PathBuf) -> Box<Cell<std::process::Command>> {
+    pub fn stop_db_command_sync(&self, database_dir: &PathBuf) -> PgCommandSync {
         let pg_ctl_executable = self.pg_ctl_exe.to_str().unwrap();
         let mut command =
             Box::new(

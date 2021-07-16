@@ -28,6 +28,7 @@ use crate::{pg_fetch, pg_unpack};
 use crate::pg_access::PgAccess;
 use crate::pg_enums::{PgAuthMethod, PgProcessType, PgServerStatus};
 use crate::pg_errors::PgEmbedError;
+use crate::pg_types::{PgResult, PgCommand};
 
 ///
 /// Database settings
@@ -90,7 +91,7 @@ impl PgEmbed {
     ///
     /// Create a new PgEmbed instance
     ///
-    pub async fn new(pg_settings: PgSettings, fetch_settings: pg_fetch::PgFetchSettings) -> Result<Self, PgEmbedError> {
+    pub async fn new(pg_settings: PgSettings, fetch_settings: pg_fetch::PgFetchSettings) -> PgResult<Self> {
         let password: &str = &pg_settings.password;
         let db_uri = format!(
             "postgres://{}:{}@localhost:{}",
@@ -115,7 +116,7 @@ impl PgEmbed {
     ///
     /// Download, unpack, create password file and database
     ///
-    pub async fn setup(&mut self) -> Result<(), PgEmbedError> {
+    pub async fn setup(&mut self) -> PgResult<()> {
         if self.pg_access.acquisition_needed().await? {
             self.acquire_postgres().await?;
         }
@@ -131,7 +132,7 @@ impl PgEmbed {
     ///
     /// Download and unpack postgres binaries
     ///
-    pub async fn acquire_postgres(&self) -> Result<(), PgEmbedError> {
+    pub async fn acquire_postgres(&self) -> PgResult<()> {
         self.pg_access.mark_acquisition_in_progress().await?;
         let pg_bin_data = &self.fetch_settings.fetch_postgres().await?;
         self.pg_access.write_pg_zip(&pg_bin_data).await?;
@@ -140,24 +141,39 @@ impl PgEmbed {
         Ok(())
     }
 
-    // pub async fn database_dir_status(&self) -> Result<>
+    ///
+    /// Get child process for a pg command
+    ///
+    /// The child process's stdout and stderr are piped
+    ///
+    fn pg_command_child_process(command: &mut PgCommand, process_type: PgProcessType) -> PgResult<Child> {
+        command.get_mut()
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| match process_type {
+                PgProcessType::InitDb => {
+                    PgEmbedError::PgInitFailure(e)
+                }
+                PgProcessType::StartDb => {
+                    PgEmbedError::PgStartFailure(e)
+                }
+                PgProcessType::StopDb => {
+                    PgEmbedError::PgStopFailure(e)
+                }
+            })
+    }
 
     ///
     /// Initialize postgresql database
     ///
     /// Returns `Ok(())` on success, otherwise returns an error.
     ///
-    pub async fn init_db(&mut self) -> Result<(), PgEmbedError> {
+    pub async fn init_db(&mut self) -> PgResult<()> {
         self.server_status = PgServerStatus::Initializing;
         let mut init_db_command = self.pg_access.init_db_command(&self.pg_settings.database_dir, &self.pg_settings.user, &self.pg_settings.auth_method);
-        let mut process = init_db_command.get_mut()
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| PgEmbedError::PgInitFailure(e))?;
-
+        let mut process = Self::pg_command_child_process(&mut init_db_command, PgProcessType::InitDb)?;
         self.handle_process_io(&mut process).await?;
-
         self.timeout_pg_process(&mut process, PgProcessType::InitDb).await
     }
 
@@ -166,20 +182,11 @@ impl PgEmbed {
     ///
     /// Returns `Ok(())` on success, otherwise returns an error.
     ///
-    pub async fn start_db(&mut self) -> Result<(), PgEmbedError> {
+    pub async fn start_db(&mut self) -> PgResult<()> {
         self.server_status = PgServerStatus::Starting;
         let mut start_db_command = self.pg_access.start_db_command(&self.pg_settings.database_dir, self.pg_settings.port);
-
-        let mut process = start_db_command
-            .get_mut()
-            // .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| PgEmbedError::PgStartFailure(e))?;
-
+        let mut process = Self::pg_command_child_process(&mut start_db_command, PgProcessType::StartDb)?;
         self.handle_process_io(&mut process).await?;
-
         self.timeout_pg_process(&mut process, PgProcessType::StartDb).await
     }
 
@@ -188,17 +195,11 @@ impl PgEmbed {
     ///
     /// Returns `Ok(())` on success, otherwise returns an error.
     ///
-    pub async fn stop_db(&mut self) -> Result<(), PgEmbedError> {
+    pub async fn stop_db(&mut self) -> PgResult<()> {
         self.server_status = PgServerStatus::Stopping;
         let mut stop_db_command = self.pg_access.stop_db_command(&self.pg_settings.database_dir);
-        let mut process = stop_db_command.get_mut()
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| PgEmbedError::PgStopFailure(e))?;
-
+        let mut process = Self::pg_command_child_process(&mut stop_db_command, PgProcessType::StopDb)?;
         self.handle_process_io(&mut process).await?;
-
         self.timeout_pg_process(&mut process, PgProcessType::StopDb).await
     }
 
@@ -208,7 +209,7 @@ impl PgEmbed {
     ///
     /// Returns `Ok(())` on success, otherwise returns an error.
     ///
-    pub fn stop_db_sync(&mut self) -> Result<(), PgEmbedError> {
+    pub fn stop_db_sync(&mut self) -> PgResult<()> {
         self.server_status = PgServerStatus::Stopping;
 
         let mut stop_db_command = self.pg_access.stop_db_command_sync(&self.pg_settings.database_dir);
@@ -222,49 +223,74 @@ impl PgEmbed {
     }
 
     ///
+    /// Get process error for corresponding process type
+    ///
+    fn process_type_failure(process_type: PgProcessType, exit_code: Option<i32>) -> PgEmbedError {
+        match process_type {
+            PgProcessType::InitDb => {
+                PgEmbedError::PgInitFailure(
+                    Error::new(
+                        ErrorKind::Other,
+                        format!("Postgresql {} command failure with exit status {:?}", process_type.to_string(), exit_code),
+                    )
+                )
+            }
+            PgProcessType::StartDb => {
+                PgEmbedError::PgStartFailure(
+                    Error::new(
+                        ErrorKind::Other,
+                        format!("Postgresql {} command failure with exit status {:?}", process_type.to_string(), exit_code),
+                    )
+                )
+            }
+            PgProcessType::StopDb => {
+                PgEmbedError::PgStopFailure(
+                    Error::new(
+                        ErrorKind::Other,
+                        format!("Postgresql {} command failure with exit status {:?}", process_type.to_string(), exit_code),
+                    )
+                )
+            }
+        }
+    }
+
+    ///
+    /// Get server status for corresponding exit status
+    ///
+    fn process_type_server_status(exit_status: io::Result<ExitStatus>, process_type: PgProcessType) -> PgResult<PgServerStatus> {
+        let mut exit_code: Option<i32> = None;
+        if let Ok(status) = exit_status {
+            exit_code = status.code();
+            if status.success() {
+                return match process_type {
+                    PgProcessType::InitDb => Ok(PgServerStatus::Initialized),
+                    PgProcessType::StartDb => Ok(PgServerStatus::Started),
+                    PgProcessType::StopDb => Ok(PgServerStatus::Stopped),
+                };
+            }
+        }
+        Err(Self::process_type_failure(process_type, exit_code))
+    }
+
+    ///
     /// Execute postgresql process with timeout
     ///
-    async fn timeout_pg_process(&mut self, process: &mut Child, process_type: PgProcessType) -> Result<(), PgEmbedError> {
+    async fn timeout_pg_process(&mut self, process: &mut Child, process_type: PgProcessType) -> PgResult<()> {
         let timed_exit_status: Result<io::Result<ExitStatus>, Elapsed> = timeout(self.pg_settings.timeout, process.wait()).await;
-        match timed_exit_status {
-            Ok(exit_result) => {
-                match exit_result {
-                    Ok(exit_status) => {
-                        if exit_status.success() {
-                            match process_type {
-                                PgProcessType::InitDb => {
-                                    self.server_status = PgServerStatus::Initialized;
-                                }
-                                PgProcessType::StartDb => {
-                                    self.server_status = PgServerStatus::Started;
-                                }
-                                PgProcessType::StopDb => {
-                                    self.server_status = PgServerStatus::Stopped;
-                                }
-                            }
-                            Ok(())
-                        } else {
-                            self.server_status = PgServerStatus::Failure;
-                            Err(PgEmbedError::PgStartFailure(Error::new(ErrorKind::Other, format!("Postgresql {} command failed with {}", process_type.to_string(), exit_status))))
-                        }
-                    }
-                    Err(err) => {
-                        self.server_status = PgServerStatus::Failure;
-                        Err(PgEmbedError::PgStartFailure(Error::new(ErrorKind::Other, format!("Postgresql {} command failed with {}", process_type.to_string(), err.to_string()))))
-                    }
-                }
-            }
-            Err(_) => {
-                self.server_status = PgServerStatus::Failure;
-                Err(PgEmbedError::PgStopFailure(Error::new(ErrorKind::TimedOut, format!("Postgresql {} command timed out", process_type.to_string()))))
-            }
+        if let Ok(exit_result) = timed_exit_status {
+            let status = Self::process_type_server_status(exit_result, process_type)?;
+            self.server_status = status;
+            Ok(())
+        } else {
+            self.server_status = PgServerStatus::Failure;
+            Err(PgEmbedError::PgTimedOutError())
         }
     }
 
     ///
     /// Handle process logging
     ///
-    pub async fn handle_process_io(&self, process: &mut Child) -> Result<(), PgEmbedError> {
+    pub async fn handle_process_io(&self, process: &mut Child) -> PgResult<()> {
         let mut reader_out = BufReader::new(process.stdout.take().unwrap()).lines();
         let mut reader_err = BufReader::new(process.stderr.take().unwrap()).lines();
         if let Some(line) = reader_out.next_line().await.map_err(|e| PgEmbedError::PgBufferReadError(e))? {
@@ -281,7 +307,7 @@ impl PgEmbed {
     ///
     /// Handle process logging synchronous
     ///
-    pub fn handle_process_io_sync(&self, process: &mut std::process::Child) -> Result<(), PgEmbedError> {
+    pub fn handle_process_io_sync(&self, process: &mut std::process::Child) -> PgResult<()> {
         let reader_out = std::io::BufReader::new(process.stdout.take().unwrap()).lines();
         let reader_err = std::io::BufReader::new(process.stderr.take().unwrap()).lines();
         reader_out.for_each(|line| info!("{}", line.unwrap()));
@@ -293,7 +319,7 @@ impl PgEmbed {
     /// Create a database
     ///
     #[cfg(any(feature = "rt_tokio_migrate", feature = "rt_async_std_migrate", feature = "rt_actix_migrate"))]
-    pub async fn create_database(&self, db_name: &str) -> Result<(), PgEmbedError> {
+    pub async fn create_database(&self, db_name: &str) -> PgResult<()> {
         Postgres::create_database(&self.full_db_uri(db_name)).await?;
         Ok(())
     }
@@ -302,7 +328,7 @@ impl PgEmbed {
     /// Drop a database
     ///
     #[cfg(any(feature = "rt_tokio_migrate", feature = "rt_async_std_migrate", feature = "rt_actix_migrate"))]
-    pub async fn drop_database(&self, db_name: &str) -> Result<(), PgEmbedError> {
+    pub async fn drop_database(&self, db_name: &str) -> PgResult<()> {
         Postgres::drop_database(&self.full_db_uri(db_name)).await?;
         Ok(())
     }
@@ -311,7 +337,7 @@ impl PgEmbed {
     /// Check database existence
     ///
     #[cfg(any(feature = "rt_tokio_migrate", feature = "rt_async_std_migrate", feature = "rt_actix_migrate"))]
-    pub async fn database_exists(&self, db_name: &str) -> Result<bool, PgEmbedError> {
+    pub async fn database_exists(&self, db_name: &str) -> PgResult<bool> {
         let result = Postgres::database_exists(&self.full_db_uri(db_name)).await?;
         Ok(result)
     }
@@ -329,7 +355,7 @@ impl PgEmbed {
     /// Run migrations
     ///
     #[cfg(any(feature = "rt_tokio_migrate", feature = "rt_async_std_migrate", feature = "rt_actix_migrate"))]
-    pub async fn migrate(&self, db_name: &str) -> Result<(), PgEmbedError> {
+    pub async fn migrate(&self, db_name: &str) -> PgResult<()> {
         if let Some(migration_dir) = &self.pg_settings.migration_dir {
             let m = Migrator::new(migration_dir.as_path()).await?;
             let pool = PgPoolOptions::new().connect(&self.full_db_uri(db_name)).await?;

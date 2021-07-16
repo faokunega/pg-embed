@@ -179,3 +179,4 @@ pub mod pg_access;
 pub mod pg_enums;
 pub mod pg_unpack;
 pub mod pg_errors;
+pub mod pg_types;
