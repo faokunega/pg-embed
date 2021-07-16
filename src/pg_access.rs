@@ -29,6 +29,7 @@ lazy_static! {
 }
 
 const PG_EMBED_CACHE_DIR_NAME: &'static str = "pg-embed";
+const PG_VERSION_FILE_NAME: &'static str = "PG_VERSION";
 
 ///
 /// Access to pg_ctl, initdb, database directory and cache directory
@@ -76,7 +77,7 @@ impl PgAccess {
         let mut pw_file = database_dir.clone();
         pw_file.set_extension("pwfile");
         let mut pg_version_file = database_dir.clone();
-        pg_version_file.push("PG_VERSION");
+        pg_version_file.push(PG_VERSION_FILE_NAME);
 
         Ok(
             PgAccess {
@@ -86,7 +87,7 @@ impl PgAccess {
                 init_db_exe: init_db,
                 pw_file_path: pw_file,
                 zip_file_path,
-                pg_version_file
+                pg_version_file,
             }
         )
     }
@@ -131,6 +132,21 @@ impl PgAccess {
     ///
     pub async fn db_files_exist(&self) -> Result<bool, PgEmbedError> {
         Self::path_exists(self.pg_version_file.as_path()).await
+    }
+
+    ///
+    /// Check if database version file exists
+    ///
+    pub async fn pg_version_file_exists(db_dir: &PathBuf) -> Result<bool, PgEmbedError> {
+        let mut pg_version_file = db_dir.clone();
+        pg_version_file.push(PG_VERSION_FILE_NAME);
+        let file_exists =
+            if let Ok(_) = tokio::fs::File::open(pg_version_file.as_path()).await {
+                true
+            } else {
+                false
+            };
+        Ok(file_exists)
     }
 
     ///
@@ -246,6 +262,19 @@ impl PgAccess {
         cache_dir.push(PG_EMBED_CACHE_DIR_NAME);
         let _ = tokio::fs::remove_dir_all(cache_dir.as_path()).map_err(|e| PgEmbedError::PgPurgeFailure(e)).await;
         Ok(())
+    }
+
+    ///
+    /// Clean up database directory and password file
+    ///
+    pub async fn clean_up(database_dir: PathBuf, pw_file: PathBuf) -> Result<(), PgEmbedError> {
+        tokio::fs::remove_dir_all(database_dir.as_path())
+            .await
+            .map_err(|e| PgEmbedError::PgCleanUpFailure(e))?;
+
+        tokio::fs::remove_file(pw_file.as_path())
+            .await
+            .map_err(|e| PgEmbedError::PgCleanUpFailure(e))
     }
 
     ///

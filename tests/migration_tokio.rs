@@ -14,12 +14,28 @@ mod common;
 
 #[tokio::test]
 #[serial]
-async fn db_creation() -> Result<(), PgEmbedError> {
+async fn db_create_database() -> Result<(), PgEmbedError> {
     let mut pg = common::setup(5432, PathBuf::from("data_test/db"), false, None).await?;
     pg.start_db().await?;
     let db_name = "test";
+
     pg.create_database(&db_name).await?;
     assert!(pg.database_exists(&db_name).await?);
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn db_drop_database() -> Result<(), PgEmbedError> {
+    let mut pg = common::setup(5432, PathBuf::from("data_test/db"), false, None).await?;
+    pg.start_db().await?;
+    let db_name = "test";
+
+    pg.create_database(&db_name).await?;
+    assert_eq!(true, pg.database_exists(&db_name).await?);
+
+    pg.drop_database(&db_name).await?;
+    assert_eq!(false, pg.database_exists(&db_name).await?);
     Ok(())
 }
 
@@ -35,7 +51,7 @@ async fn db_migration() -> Result<(), PgEmbedError> {
     pg.start_db().await?;
     let db_name = "test";
     pg.create_database(&db_name).await?;
-    assert!(pg.database_exists(&db_name).await?);
+
     pg.migrate(&db_name).await?;
 
     let db_uri = pg.full_db_uri(&db_name);

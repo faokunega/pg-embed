@@ -75,7 +75,9 @@ pub struct PgEmbed {
 
 impl Drop for PgEmbed {
     fn drop(&mut self) {
-        if self.server_status != PgServerStatus::Stopped {
+        if self.server_status != PgServerStatus::Stopped
+            || self.server_status != PgServerStatus::Stopping
+        {
             let _ = self.stop_db_sync();
         }
         if !&self.pg_settings.persistent {

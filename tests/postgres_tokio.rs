@@ -33,10 +33,10 @@ async fn postgres_server_drop() -> Result<(), PgEmbedError> {
     {
         let mut pg = common::setup(5432, db_path.clone(), false, None).await?;
         pg.start_db().await?;
-        let file_exists = common::pg_version_file_exists(&db_path).await?;
+        let file_exists = PgAccess::pg_version_file_exists(&db_path).await?;
         assert_eq!(true, file_exists);
     }
-    let file_exists = common::pg_version_file_exists(&db_path).await?;
+    let file_exists = PgAccess::pg_version_file_exists(&db_path).await?;
     assert_eq!(false, file_exists);
     Ok(())
 }
@@ -93,15 +93,15 @@ async fn postgres_server_persistent_true() -> Result<(), PgEmbedError> {
         ).await?;
         database_dir.clone_from(&pg.pg_access.database_dir);
         pw_file_path.clone_from(&pg.pg_access.pw_file_path);
-        let file_exists = common::pg_version_file_exists(&db_path).await?;
+        let file_exists = PgAccess::pg_version_file_exists(&db_path).await?;
         assert_eq!(true, file_exists);
     }
-    let file_exists = common::pg_version_file_exists(&db_path).await?;
+    let file_exists = PgAccess::pg_version_file_exists(&db_path).await?;
     assert_eq!(true, file_exists);
 
-    common::clean_up(database_dir, pw_file_path).await?;
+    PgAccess::clean_up(database_dir, pw_file_path).await?;
 
-    let file_exists = common::pg_version_file_exists(&db_path).await?;
+    let file_exists = PgAccess::pg_version_file_exists(&db_path).await?;
     assert_eq!(false, file_exists);
 
     Ok(())
@@ -118,10 +118,10 @@ async fn postgres_server_persistent_false() -> Result<(), PgEmbedError> {
             false,
             None,
         ).await?;
-        let file_exists = common::pg_version_file_exists(&db_path).await?;
+        let file_exists = PgAccess::pg_version_file_exists(&db_path).await?;
         assert_eq!(true, file_exists);
     }
-    let file_exists = common::pg_version_file_exists(&db_path).await?;
+    let file_exists = PgAccess::pg_version_file_exists(&db_path).await?;
     assert_eq!(false, file_exists);
 
     Ok(())
