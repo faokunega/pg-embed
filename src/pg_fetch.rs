@@ -10,6 +10,7 @@ use reqwest::Response;
 
 use crate::pg_enums::{Architecture, OperationSystem};
 use crate::pg_errors::PgEmbedError;
+use crate::pg_types::PgResult;
 
 /// Postgresql version struct (simple version wrapper)
 pub struct PostgresVersion(
@@ -74,7 +75,7 @@ impl PgFetchSettings {
     ///
     /// Returns the data of the downloaded binary in an `Ok([u8])` on success, otherwise returns an error.
     ///
-    pub async fn fetch_postgres(&self) -> Result<Box<Bytes>, PgEmbedError>
+    pub async fn fetch_postgres(&self) -> PgResult<Box<Bytes>>
     {
         let platform = &self.platform();
         let version = self.version.0;
