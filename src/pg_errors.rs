@@ -58,7 +58,7 @@ pub enum PgEmbedError {
     PgTaskJoinError(),
     /// Error wrapper
     #[error("error wrapper")]
-    PgError(#[from] dyn std::error::Error),
+    PgError(#[from] Box<dyn std::error::Error>),
     /// Postgresql binaries download failure
     #[error("postgresql binaries download failure")]
     #[cfg(any(

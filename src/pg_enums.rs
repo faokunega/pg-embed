@@ -84,7 +84,7 @@ impl ProcessStatus<PgServerStatus, PgEmbedError> for PgProcessType {
         }
     }
 
-    fn wrap_error(&self, error: &dyn std::error::Error) -> PgEmbedError {
+    fn wrap_error<E: Error>(&self, error: E) -> PgEmbedError {
         PgEmbedError::PgError(error)
     }
 }

@@ -5,6 +5,7 @@ use std::cell::Cell;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::io::ErrorKind;
+use std::marker;
 use std::process::Stdio;
 
 use async_trait::async_trait;
@@ -19,6 +20,7 @@ use tokio::time::Duration;
 ///
 /// Output logging type
 ///
+#[derive(Debug)]
 pub enum LogType {
     Info,
     Error,
@@ -35,12 +37,13 @@ pub trait ProcessStatus<T, E: Error> {
     /// process error type
     fn error_type(&self) -> E;
     /// wrap error
-    fn wrap_error(&self, error: dyn std::error::Error) -> E;
+    fn wrap_error<F: Error>(&self, error: F) -> E;
 }
 
 ///
 /// Logging data
 ///
+#[derive(Debug)]
 pub struct LogOutputData {
     line: String,
     log_type: LogType,
@@ -50,54 +53,61 @@ pub struct LogOutputData {
 /// Async command trait
 ///
 #[async_trait]
-pub trait AsyncCommand<S, E: Error, T> {
+pub trait AsyncCommand<S, E, P>
+where
+    E: Error,
+    P: ProcessStatus<S, E>,
+    Self: Sized,
+{
     ///
     /// Create a new async command
     ///
-    fn new<ARGS, ARG>(executable_path: &OsStr, args: ARGS, process_type: T) -> Result<Self, E>
+    fn new<A, B>(executable_path: &OsStr, args: A, process_type: P) -> Result<Self, E>
     where
-        ARGS: IntoIterator<Item = ARG>,
-        ARG: AsRef<OsStr>;
+        A: IntoIterator<Item = B>,
+        B: AsRef<OsStr>;
     ///
     /// Execute command
     ///
     /// When timeout is Some(duration) the process execution will be timed out after duration,
     /// if set to None the process execution will not be timed out.
     ///
-    async fn execute(&self, timeout: Option<Duration>) -> Result<S, E>;
+    async fn execute(&mut self, timeout: Option<Duration>) -> Result<S, E>;
 }
 
 ///
 /// Process command
 ///
-pub struct AsyncCommandExecutor<S, E: Error, T: ProcessStatus<S, E>> {
+pub struct AsyncCommandExecutor<S, E, P>
+where
+    E: Error,
+    P: ProcessStatus<S, E>,
+{
     /// Process command
     command: tokio::process::Command,
     /// Process child
     process: Child,
     /// Process type
-    process_type: T,
+    process_type: P,
+    _marker_s: marker::PhantomData<S>,
+    _marker_e: marker::PhantomData<E>,
 }
 
-impl<S, E, T> AsyncCommandExecutor<S, E, T>
-where
-    E: Error,
-    T: ProcessStatus<S, E>,
-{
+impl<S, E: Error, P: ProcessStatus<S, E>> AsyncCommandExecutor<S, E, P> {
     /// Initialize command
-    fn init(command: &mut tokio::process::Command, process_type: &T) -> Result<Child, E> {
+    fn init(command: &mut tokio::process::Command, process_type: &P) -> Result<Child, E> {
         command
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| process_type.error_type(e))
+            .map_err(|_| process_type.error_type())
     }
 
     /// Generate a command
-    fn generate_command<ARGS, ARG>(executable_path: &OsStr, args: ARGS) -> tokio::process::Command
+    fn generate_command<A, B>(executable_path: &OsStr, args: A) -> tokio::process::Command
     where
-        ARGS: IntoIterator<Item = ARG>,
-        ARG: AsRef<OsStr>,
+        A: IntoIterator<Item = B>,
+        B: AsRef<OsStr>,
     {
         let mut command = tokio::process::Command::new(executable_path);
         command.args(args);
@@ -105,13 +115,17 @@ where
     }
 
     /// Handle process output
-    async fn handle_output<READ: AsyncRead>(
+    async fn handle_output<R: AsyncRead + Unpin>(
         &self,
-        data: READ,
+        data: R,
         sender: Sender<LogOutputData>,
     ) -> Result<(), E> {
         let mut lines = BufReader::new(data).lines();
-        while let Some(line) = lines.next_line().await? {
+        while let Some(line) = lines
+            .next_line()
+            .await
+            .map_err(|e| self.process_type.wrap_error(&e))?
+        {
             let io_data = LogOutputData {
                 line,
                 log_type: LogType::Info,
@@ -144,7 +158,7 @@ where
             .process
             .wait()
             .await
-            .map_err(|e| self.process_type.wrap_error(e))?;
+            .map_err(|e| self.process_type.wrap_error(&e))?;
         if exit_status.success() {
             Ok(self.process_type.status_exit())
         } else {
@@ -154,18 +168,20 @@ where
 }
 
 #[async_trait]
-impl<S, E, T> AsyncCommand<S, E, T> for AsyncCommandExecutor<S, E, T>
-where
-    E: Error,
-    T: ProcessStatus<S, E>,
-{
-    fn new<ARGS, ARG>(executable_path: &OsStr, args: ARGS, process_type: T) -> Result<Self, E> {
+impl<S, E: Error, P: ProcessStatus<S, E>> AsyncCommand<S, E, P> for AsyncCommandExecutor<S, E, P> {
+    fn new<A, B>(executable_path: &OsStr, args: A, process_type: P) -> Result<Self, E>
+    where
+        A: IntoIterator<Item = B>,
+        B: AsRef<OsStr>,
+    {
         let mut command = Self::generate_command(executable_path, args);
         let process = Self::init(&mut command, &process_type)?;
         Ok(AsyncCommandExecutor {
             command,
             process,
             process_type,
+            _marker_s: Default::default(),
+            _marker_e: Default::default(),
         })
     }
 
@@ -174,15 +190,11 @@ where
         {
             let tx = sender.clone();
             let stdout = self.process.stdout.take().unwrap();
-            tokio::spawn(async move {
-                self.handle_output(stdout, tx).await?;
-            });
+            let _ = tokio::spawn(async move { self.handle_output(stdout, tx).await });
         }
         {
             let stderr = self.process.stderr.take().unwrap();
-            tokio::spawn(async move {
-                self.handle_output(stderr, sender).await?;
-            });
+            let _ = tokio::spawn(async move { self.handle_output(stderr, sender).await });
         }
         Self::log_output(receiver).await;
         self.run_process().await
