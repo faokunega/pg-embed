@@ -11,12 +11,12 @@ use std::sync::Arc;
 use futures::TryFutureExt;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
-use tokio::time::{Duration, interval};
+use tokio::time::{interval, Duration};
 
 use crate::pg_enums::{OperationSystem, PgAcquisitionStatus, PgAuthMethod};
 use crate::pg_errors::PgEmbedError;
 use crate::pg_fetch::PgFetchSettings;
-use crate::pg_types::{PgResult, PgCommandSync, PgCommand};
+use crate::pg_types::{PgCommandSync, PgResult};
 
 lazy_static! {
     ///
@@ -59,38 +59,40 @@ impl PgAccess {
     ///
     /// Directory structure for cached postgresql binaries will be created
     ///
-    pub async fn new(fetch_settings: &PgFetchSettings, database_dir: &PathBuf) -> Result<Self, PgEmbedError> {
+    pub async fn new(
+        fetch_settings: &PgFetchSettings,
+        database_dir: &PathBuf,
+    ) -> Result<Self, PgEmbedError> {
+        // cache directory
         let cache_dir = Self::create_cache_dir_structure(&fetch_settings).await?;
         Self::create_db_dir_structure(database_dir).await?;
+        // pg_ctl executable
         let mut pg_ctl = cache_dir.clone();
         pg_ctl.push("bin/pg_ctl");
+        // initdb executable
         let mut init_db = cache_dir.clone();
         init_db.push("bin/initdb");
+        // postgres zip file
         let mut zip_file_path = cache_dir.clone();
-        let platform =
-            fetch_settings.platform();
-        let file_name = format!(
-            "{}-{}.zip",
-            platform,
-            &fetch_settings.version.0
-        );
+        let platform = fetch_settings.platform();
+        let file_name = format!("{}-{}.zip", platform, &fetch_settings.version.0);
         zip_file_path.push(file_name);
+        // password file
         let mut pw_file = database_dir.clone();
         pw_file.set_extension("pwfile");
+        // postgres version file
         let mut pg_version_file = database_dir.clone();
         pg_version_file.push(PG_VERSION_FILE_NAME);
 
-        Ok(
-            PgAccess {
-                cache_dir,
-                database_dir: database_dir.clone(),
-                pg_ctl_exe: pg_ctl,
-                init_db_exe: init_db,
-                pw_file_path: pw_file,
-                zip_file_path,
-                pg_version_file,
-            }
-        )
+        Ok(PgAccess {
+            cache_dir,
+            database_dir: database_dir.clone(),
+            pg_ctl_exe: pg_ctl,
+            init_db_exe: init_db,
+            pw_file_path: pw_file,
+            zip_file_path,
+            pg_version_file,
+        })
     }
 
     ///
@@ -99,26 +101,36 @@ impl PgAccess {
     /// Returns PathBuf(cache_directory) on success, an error otherwise
     ///
     async fn create_cache_dir_structure(fetch_settings: &PgFetchSettings) -> PgResult<PathBuf> {
-        let cache_dir =
-            dirs::cache_dir().ok_or_else(
-                || PgEmbedError::DirCreationError(Error::new(ErrorKind::Other, "cache dir error"))
-            )?;
+        let cache_dir = dirs::cache_dir().ok_or_else(|| {
+            PgEmbedError::DirCreationError(Error::new(ErrorKind::Other, "cache dir error"))
+        })?;
         let os_string = match fetch_settings.operating_system {
-            OperationSystem::Darwin | OperationSystem::Windows | OperationSystem::Linux => fetch_settings.operating_system.to_string(),
-            OperationSystem::AlpineLinux => format!("arch_{}", fetch_settings.operating_system.to_string())
+            OperationSystem::Darwin | OperationSystem::Windows | OperationSystem::Linux => {
+                fetch_settings.operating_system.to_string()
+            }
+            OperationSystem::AlpineLinux => {
+                format!("arch_{}", fetch_settings.operating_system.to_string())
+            }
         };
-        let pg_path = format!("{}/{}/{}/{}", PG_EMBED_CACHE_DIR_NAME, os_string, fetch_settings.architecture.to_string(), fetch_settings.version.0);
+        let pg_path = format!(
+            "{}/{}/{}/{}",
+            PG_EMBED_CACHE_DIR_NAME,
+            os_string,
+            fetch_settings.architecture.to_string(),
+            fetch_settings.version.0
+        );
         let mut cache_pg_embed = cache_dir.clone();
         cache_pg_embed.push(pg_path);
-        tokio::fs::create_dir_all(
-            &cache_pg_embed,
-        ).map_err(|e| PgEmbedError::DirCreationError(e))
+        tokio::fs::create_dir_all(&cache_pg_embed)
+            .map_err(|e| PgEmbedError::DirCreationError(e))
             .await?;
         Ok(cache_pg_embed)
     }
 
     async fn create_db_dir_structure(db_dir: &PathBuf) -> PgResult<()> {
-        tokio::fs::create_dir_all(db_dir).map_err(|e| PgEmbedError::DirCreationError(e)).await
+        tokio::fs::create_dir_all(db_dir)
+            .map_err(|e| PgEmbedError::DirCreationError(e))
+            .await
     }
 
     ///
@@ -141,12 +153,11 @@ impl PgAccess {
     pub async fn pg_version_file_exists(db_dir: &PathBuf) -> PgResult<bool> {
         let mut pg_version_file = db_dir.clone();
         pg_version_file.push(PG_VERSION_FILE_NAME);
-        let file_exists =
-            if let Ok(_) = tokio::fs::File::open(pg_version_file.as_path()).await {
-                true
-            } else {
-                false
-            };
+        let file_exists = if let Ok(_) = tokio::fs::File::open(pg_version_file.as_path()).await {
+            true
+        } else {
+            false
+        };
         Ok(file_exists)
     }
 
@@ -190,15 +201,10 @@ impl PgAccess {
     ///
     pub async fn acquisition_status(&self) -> PgAcquisitionStatus {
         let lock = ACQUIRED_PG_BINS.lock().await;
-        let acquisition_status = lock
-            .get(&self.cache_dir);
+        let acquisition_status = lock.get(&self.cache_dir);
         match acquisition_status {
-            None => {
-                PgAcquisitionStatus::Undefined
-            }
-            Some(status) => {
-                *status
-            }
+            None => PgAcquisitionStatus::Undefined,
+            Some(status) => *status,
         }
     }
 
@@ -215,26 +221,23 @@ impl PgAccess {
                     }
                     Ok(false)
                 }
-                PgAcquisitionStatus::Finished => {
-                    Ok(false)
-                }
-                PgAcquisitionStatus::Undefined => {
-                    Ok(true)
-                }
+                PgAcquisitionStatus::Finished => Ok(false),
+                PgAcquisitionStatus::Undefined => Ok(true),
             }
         } else {
             Ok(false)
         }
     }
 
-
     ///
     /// Write pg binaries zip to postgresql cache directory
     ///
     pub async fn write_pg_zip(&self, bytes: &[u8]) -> PgResult<()> {
-        let mut file: tokio::fs::File =
-            tokio::fs::File::create(&self.zip_file_path.as_path()).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
-        file.write_all(&bytes).map_err(|e| PgEmbedError::WriteFileError(e))
+        let mut file: tokio::fs::File = tokio::fs::File::create(&self.zip_file_path.as_path())
+            .map_err(|e| PgEmbedError::WriteFileError(e))
+            .await?;
+        file.write_all(&bytes)
+            .map_err(|e| PgEmbedError::WriteFileError(e))
             .await?;
         Ok(())
     }
@@ -246,8 +249,10 @@ impl PgAccess {
     ///
     pub fn clean(&self) -> PgResult<()> {
         // not using tokio::fs async methods because clean() is called on drop
-        std::fs::remove_dir_all(self.database_dir.as_path()).map_err(|e| PgEmbedError::PgCleanUpFailure(e))?;
-        std::fs::remove_file(self.pw_file_path.as_path()).map_err(|e| PgEmbedError::PgCleanUpFailure(e))?;
+        std::fs::remove_dir_all(self.database_dir.as_path())
+            .map_err(|e| PgEmbedError::PgCleanUpFailure(e))?;
+        std::fs::remove_file(self.pw_file_path.as_path())
+            .map_err(|e| PgEmbedError::PgCleanUpFailure(e))?;
         Ok(())
     }
 
@@ -257,11 +262,13 @@ impl PgAccess {
     /// Remove all cached postgresql executables
     ///
     pub async fn purge() -> PgResult<()> {
-        let mut cache_dir = dirs::cache_dir().ok_or_else(
-            || PgEmbedError::ReadFileError(Error::new(ErrorKind::Other, "cache dir error"))
-        )?;
+        let mut cache_dir = dirs::cache_dir().ok_or_else(|| {
+            PgEmbedError::ReadFileError(Error::new(ErrorKind::Other, "cache dir error"))
+        })?;
         cache_dir.push(PG_EMBED_CACHE_DIR_NAME);
-        let _ = tokio::fs::remove_dir_all(cache_dir.as_path()).map_err(|e| PgEmbedError::PgPurgeFailure(e)).await;
+        let _ = tokio::fs::remove_dir_all(cache_dir.as_path())
+            .map_err(|e| PgEmbedError::PgPurgeFailure(e))
+            .await;
         Ok(())
     }
 
@@ -284,86 +291,14 @@ impl PgAccess {
     /// Returns `Ok(())` on success, otherwise returns an error.
     ///
     pub async fn create_password_file(&self, password: &[u8]) -> PgResult<()> {
-        let mut file: tokio::fs::File = tokio::fs::File::create(self.pw_file_path.as_path()).map_err(|e| PgEmbedError::WriteFileError(e)).await?;
+        let mut file: tokio::fs::File = tokio::fs::File::create(self.pw_file_path.as_path())
+            .map_err(|e| PgEmbedError::WriteFileError(e))
+            .await?;
         let _ = file
-            .write(password).map_err(|e| PgEmbedError::WriteFileError(e))
+            .write(password)
+            .map_err(|e| PgEmbedError::WriteFileError(e))
             .await?;
         Ok(())
-    }
-
-    ///
-    /// Create initdb command
-    ///
-    pub fn init_db_command(&self, database_dir: &PathBuf, user: &str, auth_method: &PgAuthMethod) -> PgCommand {
-        let init_db_executable = self.init_db_exe.to_str().unwrap();
-        let password_file_arg = format!("--pwfile={}", self.pw_file_path.to_str().unwrap());
-        let auth_host =
-            match auth_method {
-                PgAuthMethod::Plain => {
-                    "password"
-                }
-                PgAuthMethod::MD5 => {
-                    "md5"
-                }
-                PgAuthMethod::ScramSha256 => {
-                    "scram-sha-256"
-                }
-            };
-
-        let mut command =
-            Box::new(
-                Cell::new(
-                    tokio::process::Command::new(init_db_executable)
-                )
-            );
-        command.get_mut()
-            .args(&[
-                "-A",
-                auth_host,
-                "-U",
-                user,
-                "-D",
-                database_dir.to_str().unwrap(),
-                &password_file_arg,
-            ]);
-        command
-    }
-
-    ///
-    /// Create pg_ctl start command
-    ///
-    pub fn start_db_command(&self, database_dir: &PathBuf, port: i16) -> PgCommand {
-        let pg_ctl_executable = self.pg_ctl_exe.to_str().unwrap();
-        let port_arg = format!("-F -p {}", port.to_string());
-        let mut command =
-            Box::new(
-                Cell::new(
-                    tokio::process::Command::new(pg_ctl_executable)
-                )
-            );
-        command.get_mut()
-            .args(&[
-                "-o", &port_arg, "start", "-w", "-D", database_dir.to_str().unwrap()
-            ]);
-        command
-    }
-
-    ///
-    /// Create pg_ctl stop command
-    ///
-    pub fn stop_db_command(&self, database_dir: &PathBuf) -> PgCommand {
-        let pg_ctl_executable = self.pg_ctl_exe.to_str().unwrap();
-        let mut command =
-            Box::new(
-                Cell::new(
-                    tokio::process::Command::new(pg_ctl_executable)
-                )
-            );
-        command.get_mut()
-            .args(&[
-                "stop", "-w", "-D", database_dir.to_str().unwrap(),
-            ]);
-        command
     }
 
     ///
@@ -371,16 +306,10 @@ impl PgAccess {
     ///
     pub fn stop_db_command_sync(&self, database_dir: &PathBuf) -> PgCommandSync {
         let pg_ctl_executable = self.pg_ctl_exe.to_str().unwrap();
-        let mut command =
-            Box::new(
-                Cell::new(
-                    std::process::Command::new(pg_ctl_executable)
-                )
-            );
-        command.get_mut()
-            .args(&[
-                "stop", "-w", "-D", database_dir.to_str().unwrap(),
-            ]);
+        let mut command = Box::new(Cell::new(std::process::Command::new(pg_ctl_executable)));
+        command
+            .get_mut()
+            .args(&["stop", "-w", "-D", database_dir.to_str().unwrap()]);
         command
     }
 }

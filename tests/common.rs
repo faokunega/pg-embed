@@ -25,7 +25,7 @@ pub async fn setup(
         password: "password".to_string(),
         auth_method: PgAuthMethod::MD5,
         persistent,
-        timeout: Duration::from_secs(20),
+        timeout: Duration::from_secs(10),
         migration_dir,
     };
     let fetch_settings = PgFetchSettings {

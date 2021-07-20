@@ -148,13 +148,14 @@
 
 extern crate dirs;
 #[macro_use]
-extern crate lazy_static;#[cfg(not(any(
-feature = "rt_tokio_migrate",
-feature = "rt_tokio",
-feature = "rt_actix_migrate",
-feature = "rt_actix",
-feature = "rt_async_std_migrate",
-feature = "rt_async_std",
+extern crate lazy_static;
+#[cfg(not(any(
+    feature = "rt_tokio_migrate",
+    feature = "rt_tokio",
+    feature = "rt_actix_migrate",
+    feature = "rt_actix",
+    feature = "rt_async_std_migrate",
+    feature = "rt_async_std",
 )))]
 compile_error!(
     "one of the features ['rt_tokio_migrate', 'rt_tokio', \
@@ -163,20 +164,22 @@ compile_error!(
 );
 
 #[cfg(any(
-all(feature = "rt_tokio", feature = "rt_async_std"),
-all(feature = "rt_tokio", feature = "rt_async_std_migrate"),
-all(feature = "rt_tokio_migrate", feature = "rt_async_std"),
-all(feature = "rt_tokio_migrate", feature = "rt_async_std_migrate"),
+    all(feature = "rt_tokio", feature = "rt_async_std"),
+    all(feature = "rt_tokio", feature = "rt_async_std_migrate"),
+    all(feature = "rt_tokio_migrate", feature = "rt_async_std"),
+    all(feature = "rt_tokio_migrate", feature = "rt_async_std_migrate"),
 ))]
 compile_error!(
     "only one of ['rt_tokio', 'rt_tokio_migrate', \
      'rt_async_std', 'rt_async_std_migrate'] can be enabled"
 );
 
-pub mod pg_fetch;
-pub mod postgres;
+pub mod command_executor;
 pub mod pg_access;
+pub mod pg_commands;
 pub mod pg_enums;
-pub mod pg_unpack;
 pub mod pg_errors;
+pub mod pg_fetch;
 pub mod pg_types;
+pub mod pg_unpack;
+pub mod postgres;

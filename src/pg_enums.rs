@@ -2,6 +2,11 @@
 //! Enums
 //!
 
+use std::error::Error;
+
+use crate::command_executor::ProcessStatus;
+use crate::pg_errors::PgEmbedError;
+
 ///
 /// Postgresql authentication method
 ///
@@ -20,7 +25,7 @@ pub enum PgAuthMethod {
 ///
 /// Postgresql server status
 ///
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PgServerStatus {
     /// Postgres uninitialized
     Uninitialized,
@@ -54,12 +59,42 @@ pub enum PgProcessType {
     StopDb,
 }
 
+impl ProcessStatus<PgServerStatus, PgEmbedError> for PgProcessType {
+    fn status_entry(&self) -> PgServerStatus {
+        match self {
+            PgProcessType::InitDb => PgServerStatus::Initializing,
+            PgProcessType::StartDb => PgServerStatus::Starting,
+            PgProcessType::StopDb => PgServerStatus::Stopping,
+        }
+    }
+
+    fn status_exit(&self) -> PgServerStatus {
+        match self {
+            PgProcessType::InitDb => PgServerStatus::Initialized,
+            PgProcessType::StartDb => PgServerStatus::Started,
+            PgProcessType::StopDb => PgServerStatus::Stopped,
+        }
+    }
+
+    fn error_type(&self) -> PgEmbedError {
+        match self {
+            PgProcessType::InitDb => PgEmbedError::PgInitFailure(),
+            PgProcessType::StartDb => PgEmbedError::PgStartFailure(),
+            PgProcessType::StopDb => PgEmbedError::PgStopFailure(),
+        }
+    }
+
+    fn wrap_error(&self, error: &dyn std::error::Error) -> PgEmbedError {
+        PgEmbedError::PgError(error)
+    }
+}
+
 impl ToString for PgProcessType {
     fn to_string(&self) -> String {
         match self {
-            PgProcessType::InitDb => { "initdb".to_string() }
-            PgProcessType::StartDb => { "start".to_string() }
-            PgProcessType::StopDb => { "stop".to_string() }
+            PgProcessType::InitDb => "initdb".to_string(),
+            PgProcessType::StartDb => "start".to_string(),
+            PgProcessType::StopDb => "stop".to_string(),
         }
     }
 }
@@ -76,10 +111,10 @@ pub enum OperationSystem {
 impl ToString for OperationSystem {
     fn to_string(&self) -> String {
         match &self {
-            OperationSystem::Darwin => { "darwin".to_string() }
-            OperationSystem::Windows => { "windows".to_string() }
-            OperationSystem::Linux => { "linux".to_string() }
-            OperationSystem::AlpineLinux => { "linux".to_string() }
+            OperationSystem::Darwin => "darwin".to_string(),
+            OperationSystem::Windows => "windows".to_string(),
+            OperationSystem::Linux => "linux".to_string(),
+            OperationSystem::AlpineLinux => "linux".to_string(),
         }
     }
 }
@@ -87,13 +122,19 @@ impl ToString for OperationSystem {
 impl Default for OperationSystem {
     fn default() -> Self {
         #[cfg(not(any(target_os = "linux", target_os = "windows")))]
-            { OperationSystem::Darwin }
+        {
+            OperationSystem::Darwin
+        }
 
         #[cfg(target_os = "linux")]
-            { OperationSystem::Linux }
+        {
+            OperationSystem::Linux
+        }
 
         #[cfg(target_os = "windows")]
-            { OperationSystem::Windows }
+        {
+            OperationSystem::Windows
+        }
     }
 }
 
@@ -111,50 +152,53 @@ pub enum Architecture {
 impl ToString for Architecture {
     fn to_string(&self) -> String {
         match &self {
-            Architecture::Amd64 => {
-                "amd64".to_string()
-            }
-            Architecture::I386 => {
-                "i386".to_string()
-            }
-            Architecture::Arm32v6 => {
-                "arm32v6".to_string()
-            }
-            Architecture::Arm32v7 => {
-                "arm32v7".to_string()
-            }
-            Architecture::Arm64v8 => {
-                "arm64v8".to_string()
-            }
-            Architecture::Ppc64le => {
-                "ppc64le".to_string()
-            }
+            Architecture::Amd64 => "amd64".to_string(),
+            Architecture::I386 => "i386".to_string(),
+            Architecture::Arm32v6 => "arm32v6".to_string(),
+            Architecture::Arm32v7 => "arm32v7".to_string(),
+            Architecture::Arm64v8 => "arm64v8".to_string(),
+            Architecture::Ppc64le => "ppc64le".to_string(),
         }
     }
 }
 
 impl Default for Architecture {
     fn default() -> Self {
-        #[cfg(not(any(target_arch = "x86", target_arch = "arm", target_arch = "aarch64", target_arch = "powerpc64")))]
-            { Architecture::Amd64 }
+        #[cfg(not(any(
+            target_arch = "x86",
+            target_arch = "arm",
+            target_arch = "aarch64",
+            target_arch = "powerpc64"
+        )))]
+        {
+            Architecture::Amd64
+        }
 
         #[cfg(target_arch = "x86")]
-            { Architecture::I386 }
+        {
+            Architecture::I386
+        }
 
         #[cfg(target_arch = "arm")]
-            { Architecture::Arm32v7 }
+        {
+            Architecture::Arm32v7
+        }
 
         #[cfg(target_arch = "aarch64")]
-            { Architecture::Arm64v8 }
+        {
+            Architecture::Arm64v8
+        }
 
         #[cfg(target_arch = "powerpc64")]
-            { Architecture::Ppc64le }
+        {
+            Architecture::Ppc64le
+        }
     }
 }
 
 /// The postgresql binaries acquisition status
 #[derive(Copy, Clone, PartialEq)]
-pub enum PgAcquisitionStatus{
+pub enum PgAcquisitionStatus {
     /// Acquiring postgresql binaries
     InProgress,
     /// Finished acquiring postgresql binaries
