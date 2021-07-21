@@ -5,6 +5,7 @@
 //! Create database clusters and databases.
 //!
 use io::{Error, ErrorKind};
+use std::cell::RefCell;
 use std::fs::read_dir;
 use std::io;
 use std::io::BufRead;
@@ -29,7 +30,7 @@ use sqlx_tokio::postgres::PgPoolOptions;
 #[cfg(feature = "rt_tokio_migrate")]
 use sqlx_tokio::Postgres;
 
-use crate::command_executor::AsyncCommand;
+use crate::command_executor::{AsyncCommand, AsyncCommandExecutor};
 use crate::pg_access::PgAccess;
 use crate::pg_commands::PgCommand;
 use crate::pg_enums::{PgAuthMethod, PgProcessType, PgServerStatus};
@@ -77,16 +78,15 @@ pub struct PgEmbed {
     /// Database uri `postgres://{username}:{password}@localhost:{port}`
     pub db_uri: String,
     /// Postgres server status
-    pub server_status: PgServerStatus,
+    pub server_status: Arc<Mutex<PgServerStatus>>,
+    pub shutting_down: bool,
     /// Postgres files access
     pub pg_access: PgAccess,
 }
 
 impl Drop for PgEmbed {
     fn drop(&mut self) {
-        if self.server_status != PgServerStatus::Stopped
-            || self.server_status != PgServerStatus::Stopping
-        {
+        if !self.shutting_down {
             let _ = self.stop_db_sync();
         }
         if !&self.pg_settings.persistent {
@@ -115,7 +115,8 @@ impl PgEmbed {
             pg_settings,
             fetch_settings,
             db_uri,
-            server_status: PgServerStatus::Uninitialized,
+            server_status: Arc::new(Mutex::new(PgServerStatus::Uninitialized)),
+            shutting_down: false,
             pg_access,
         })
     }
@@ -133,7 +134,8 @@ impl PgEmbed {
             .create_password_file(self.pg_settings.password.as_bytes())
             .await?;
         if self.pg_access.db_files_exist().await? {
-            self.server_status = PgServerStatus::Initialized;
+            let mut server_status = self.server_status.lock().await;
+            *server_status = PgServerStatus::Initialized;
         } else {
             &self.init_db().await?;
         }
@@ -159,7 +161,10 @@ impl PgEmbed {
     /// Returns `Ok(())` on success, otherwise returns an error.
     ///
     pub async fn init_db(&mut self) -> PgResult<()> {
-        self.server_status = PgServerStatus::Initializing;
+        {
+            let mut server_status = self.server_status.lock().await;
+            *server_status = PgServerStatus::Initializing;
+        }
 
         let mut executor = PgCommand::init_db_executor(
             &self.pg_access.init_db_exe,
@@ -168,8 +173,10 @@ impl PgEmbed {
             &self.pg_settings.user,
             &self.pg_settings.auth_method,
         )?;
-        let server_status = executor.execute(None).await?;
-        self.server_status = server_status;
+        executor.execute(None).await;
+        // let exit_status = executor.execute(None).await?;
+        // let mut server_status = self.server_status.lock().await;
+        // *server_status = exit_status;
         Ok(())
     }
 
@@ -179,14 +186,20 @@ impl PgEmbed {
     /// Returns `Ok(())` on success, otherwise returns an error.
     ///
     pub async fn start_db(&mut self) -> PgResult<()> {
-        self.server_status = PgServerStatus::Starting;
+        {
+            let mut server_status = self.server_status.lock().await;
+            *server_status = PgServerStatus::Starting;
+        }
+        self.shutting_down = false;
         let mut executor = PgCommand::start_db_executor(
             &self.pg_access.pg_ctl_exe,
             &self.pg_access.database_dir,
             &self.pg_settings.port,
         )?;
-        let server_status = executor.execute(None).await?;
-        self.server_status = server_status;
+        executor.execute(None).await;
+        // let exit_status = executor.execute(None).await?;
+        // let mut server_status = self.server_status.lock().await;
+        // *server_status = exit_status;
         Ok(())
     }
 
@@ -196,11 +209,17 @@ impl PgEmbed {
     /// Returns `Ok(())` on success, otherwise returns an error.
     ///
     pub async fn stop_db(&mut self) -> PgResult<()> {
-        self.server_status = PgServerStatus::Stopping;
+        {
+            let mut server_status = self.server_status.lock().await;
+            *server_status = PgServerStatus::Stopping;
+        }
+        self.shutting_down = true;
         let mut executor =
             PgCommand::stop_db_executor(&self.pg_access.pg_ctl_exe, &self.pg_access.database_dir)?;
-        let server_status = executor.execute(None).await?;
-        self.server_status = server_status;
+        executor.execute(None).await;
+        // let exit_status = executor.execute(None).await?;
+        // let mut server_status = self.server_status.lock().await;
+        // *server_status = exit_status;
         Ok(())
     }
 
@@ -210,8 +229,7 @@ impl PgEmbed {
     /// Returns `Ok(())` on success, otherwise returns an error.
     ///
     pub fn stop_db_sync(&mut self) -> PgResult<()> {
-        self.server_status = PgServerStatus::Stopping;
-
+        self.shutting_down = true;
         let mut stop_db_command = self
             .pg_access
             .stop_db_command_sync(&self.pg_settings.database_dir);
@@ -220,7 +238,7 @@ impl PgEmbed {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| PgEmbedError::PgError(e))?;
+            .map_err(|e| PgEmbedError::PgError(Box::new(e)))?;
 
         self.handle_process_io_sync(process)
     }

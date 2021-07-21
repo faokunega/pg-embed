@@ -6,7 +6,7 @@ use thiserror::Error;
 ///
 /// Common pg_embed errors, independent from features used
 ///
-#[derive(Error, Debug)]
+#[derive(Error, Clone, Debug)]
 pub enum PgEmbedError {
     /// Invalid postgresql binaries download url
     #[error("invalid postgresql binaries download url: `{0}`")]

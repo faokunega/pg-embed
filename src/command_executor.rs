@@ -1,12 +1,13 @@
 //!
 //! Process command creation and execution
 //!
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::error::Error;
 use std::ffi::OsStr;
 use std::io::ErrorKind;
 use std::marker;
 use std::process::Stdio;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::TryFutureExt;
@@ -29,7 +30,11 @@ pub enum LogType {
 ///
 /// Child process status
 ///
-pub trait ProcessStatus<T, E: Error> {
+pub trait ProcessStatus<T, E>
+where
+    E: Error,
+    Self: Send,
+{
     /// process entry status
     fn status_entry(&self) -> T;
     /// process exit status
@@ -80,8 +85,10 @@ where
 ///
 pub struct AsyncCommandExecutor<S, E, P>
 where
-    E: Error,
+    S: Send,
+    E: Error + Send,
     P: ProcessStatus<S, E>,
+    Self: Send,
 {
     /// Process command
     command: tokio::process::Command,
@@ -93,7 +100,12 @@ where
     _marker_e: marker::PhantomData<E>,
 }
 
-impl<S, E: Error, P: ProcessStatus<S, E>> AsyncCommandExecutor<S, E, P> {
+impl<S, E, P> AsyncCommandExecutor<S, E, P>
+where
+    S: Send,
+    E: Error + Send,
+    P: ProcessStatus<S, E> + Send,
+{
     /// Initialize command
     fn init(command: &mut tokio::process::Command, process_type: &P) -> Result<Child, E> {
         command
@@ -115,27 +127,18 @@ impl<S, E: Error, P: ProcessStatus<S, E>> AsyncCommandExecutor<S, E, P> {
     }
 
     /// Handle process output
-    async fn handle_output<R: AsyncRead + Unpin>(
-        &self,
-        data: R,
-        sender: Sender<LogOutputData>,
-    ) -> Result<(), E> {
+    async fn handle_output<R: AsyncRead + Unpin>(data: R, sender: Sender<LogOutputData>) -> () {
         let mut lines = BufReader::new(data).lines();
-        while let Some(line) = lines
-            .next_line()
-            .await
-            .map_err(|e| self.process_type.wrap_error(&e))?
-        {
+        while let Some(line) = lines.next_line().await.expect("error handling output") {
             let io_data = LogOutputData {
                 line,
                 log_type: LogType::Info,
             };
             sender
                 .send(io_data)
-                .map_err(|e| self.process_type.wrap_error(e))
-                .await?;
+                .await
+                .expect("error sending log output data");
         }
-        Ok(())
     }
 
     /// Log process output
@@ -168,7 +171,12 @@ impl<S, E: Error, P: ProcessStatus<S, E>> AsyncCommandExecutor<S, E, P> {
 }
 
 #[async_trait]
-impl<S, E: Error, P: ProcessStatus<S, E>> AsyncCommand<S, E, P> for AsyncCommandExecutor<S, E, P> {
+impl<S, E, P> AsyncCommand<S, E, P> for AsyncCommandExecutor<S, E, P>
+where
+    S: Send,
+    E: Error + Send,
+    P: ProcessStatus<S, E> + Send,
+{
     fn new<A, B>(executable_path: &OsStr, args: A, process_type: P) -> Result<Self, E>
     where
         A: IntoIterator<Item = B>,
@@ -190,11 +198,11 @@ impl<S, E: Error, P: ProcessStatus<S, E>> AsyncCommand<S, E, P> for AsyncCommand
         {
             let tx = sender.clone();
             let stdout = self.process.stdout.take().unwrap();
-            let _ = tokio::spawn(async move { self.handle_output(stdout, tx).await });
+            let _ = tokio::spawn(async move { Self::handle_output(stdout, tx).await });
         }
         {
             let stderr = self.process.stderr.take().unwrap();
-            let _ = tokio::spawn(async move { self.handle_output(stderr, sender).await });
+            let _ = tokio::spawn(async move { Self::handle_output(stderr, sender).await });
         }
         Self::log_output(receiver).await;
         self.run_process().await
