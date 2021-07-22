@@ -47,7 +47,7 @@ pub struct PgSettings {
     pub persistent: bool,
     /// duration to wait before terminating process execution
     /// pg_ctl start/stop and initdb timeout
-    pub timeout: Duration,
+    pub timeout: Option<Duration>,
     /// migrations folder
     /// sql script files to execute on migrate
     pub migration_dir: Option<PathBuf>,
@@ -163,7 +163,7 @@ impl PgEmbed {
             &self.pg_settings.user,
             &self.pg_settings.auth_method,
         )?;
-        let exit_status = executor.execute(None).await?;
+        let exit_status = executor.execute(self.pg_settings.timeout).await?;
         let mut server_status = self.server_status.lock().await;
         *server_status = exit_status;
         Ok(())
@@ -185,7 +185,7 @@ impl PgEmbed {
             &self.pg_access.database_dir,
             &self.pg_settings.port,
         )?;
-        let exit_status = executor.execute(None).await?;
+        let exit_status = executor.execute(self.pg_settings.timeout).await?;
         let mut server_status = self.server_status.lock().await;
         *server_status = exit_status;
         Ok(())
@@ -204,7 +204,7 @@ impl PgEmbed {
         self.shutting_down = true;
         let mut executor =
             PgCommand::stop_db_executor(&self.pg_access.pg_ctl_exe, &self.pg_access.database_dir)?;
-        let exit_status = executor.execute(None).await?;
+        let exit_status = executor.execute(self.pg_settings.timeout).await?;
         let mut server_status = self.server_status.lock().await;
         *server_status = exit_status;
         Ok(())

@@ -57,7 +57,8 @@
 //! persistent: false,
 //! // duration to wait before terminating process execution
 //! // pg_ctl start/stop and initdb timeout
-//! timeout: Duration::from_secs(15),
+//! // if set to None the process will not be terminated
+//! timeout: Some(Duration::from_secs(15)),
 //! // If migration sql scripts need to be run, the directory containing those scripts can be
 //! // specified here with `Some(PathBuf(path_to_dir)), otherwise `None` to run no migrations.
 //! // To enable migrations view the **Usage** section for details

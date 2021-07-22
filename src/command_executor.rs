@@ -6,6 +6,7 @@ use std::ffi::OsStr;
 use std::marker;
 use std::process::Stdio;
 
+use crate::pg_errors::{PgEmbedError, PgEmbedErrorType};
 use async_trait::async_trait;
 use log;
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
@@ -37,7 +38,7 @@ where
     /// process error type
     fn error_type(&self) -> E;
     /// wrap error
-    fn wrap_error<F: Error + Send + 'static>(&self, error: F) -> E;
+    fn wrap_error<F: Error + Send + 'static>(&self, error: F, message: Option<String>) -> E;
 }
 
 ///
@@ -156,12 +157,24 @@ where
             .process
             .wait()
             .await
-            .map_err(|e| self.process_type.wrap_error(e))?;
+            .map_err(|e| self.process_type.wrap_error(e, None))?;
         if exit_status.success() {
             Ok(self.process_type.status_exit())
         } else {
             Err(self.process_type.error_type())
         }
+    }
+
+    async fn command_execution(&mut self) -> Result<S, E> {
+        let (sender, receiver) = tokio::sync::mpsc::channel::<LogOutputData>(1000);
+        let res = self.run_process().await;
+        let stdout = self.process.stdout.take().unwrap();
+        let stderr = self.process.stderr.take().unwrap();
+        let tx = sender.clone();
+        let _ = tokio::task::spawn(async { Self::handle_output(stdout, tx).await });
+        let _ = tokio::task::spawn(async { Self::handle_output(stderr, sender).await });
+        let _ = tokio::task::spawn(async { Self::log_output(receiver).await });
+        res
     }
 }
 
@@ -189,14 +202,14 @@ where
     }
 
     async fn execute(&mut self, timeout: Option<Duration>) -> Result<S, E> {
-        let (sender, receiver) = tokio::sync::mpsc::channel::<LogOutputData>(1000);
-        let res = self.run_process().await;
-        let stdout = self.process.stdout.take().unwrap();
-        let stderr = self.process.stderr.take().unwrap();
-        let tx = sender.clone();
-        let _ = tokio::task::spawn(async { Self::handle_output(stdout, tx).await });
-        let _ = tokio::task::spawn(async { Self::handle_output(stderr, sender).await });
-        let _ = tokio::task::spawn(async { Self::log_output(receiver).await });
-        res
+        match timeout {
+            None => self.command_execution().await,
+            Some(duration) => tokio::time::timeout(duration, self.command_execution())
+                .await
+                .map_err(|e| {
+                    self.process_type
+                        .wrap_error(e, Some(String::from("timed out")))
+                })?,
+        }
     }
 }

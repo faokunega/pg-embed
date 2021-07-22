@@ -29,7 +29,7 @@ impl fmt::Display for PgEmbedError {
 ///
 /// Common pg_embed errors, independent from features used
 ///
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum PgEmbedErrorType {
     /// Invalid postgresql binaries download url
     InvalidPgUrl,

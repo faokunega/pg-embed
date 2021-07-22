@@ -96,11 +96,15 @@ impl ProcessStatus<PgServerStatus, PgEmbedError> for PgProcessType {
         }
     }
 
-    fn wrap_error<E: Error + Send + 'static>(&self, error: E) -> PgEmbedError {
+    fn wrap_error<E: Error + Send + 'static>(
+        &self,
+        error: E,
+        message: Option<String>,
+    ) -> PgEmbedError {
         PgEmbedError {
             error_type: PgEmbedErrorType::PgError,
             source: Some(Box::new(error)),
-            message: None,
+            message,
         }
     }
 }

@@ -4,10 +4,13 @@ use futures::stream::StreamExt;
 use serial_test::serial;
 use tokio::sync::Mutex;
 
+use env_logger::Env;
 use pg_embed::pg_access::PgAccess;
-use pg_embed::pg_enums::PgServerStatus;
-use pg_embed::pg_errors::PgEmbedError;
-use pg_embed::postgres::PgEmbed;
+use pg_embed::pg_enums::{PgAuthMethod, PgServerStatus};
+use pg_embed::pg_errors::{PgEmbedError, PgEmbedErrorType};
+use pg_embed::pg_fetch::{PgFetchSettings, PG_V13};
+use pg_embed::postgres::{PgEmbed, PgSettings};
+use std::time::Duration;
 
 mod common;
 
@@ -130,6 +133,36 @@ async fn postgres_server_persistent_false() -> Result<(), PgEmbedError> {
     }
     let file_exists = PgAccess::pg_version_file_exists(&db_path).await?;
     assert_eq!(false, file_exists);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn postgres_server_timeout() -> Result<(), PgEmbedError> {
+    let database_dir = PathBuf::from("data_test/db");
+    let _ = env_logger::Builder::from_env(Env::default().default_filter_or("info"))
+        .is_test(true)
+        .try_init();
+    let mut pg_settings = PgSettings {
+        database_dir,
+        port: 5432,
+        user: "postgres".to_string(),
+        password: "password".to_string(),
+        auth_method: PgAuthMethod::MD5,
+        persistent: false,
+        timeout: Some(Duration::from_secs(10)),
+        migration_dir: None,
+    };
+    let fetch_settings = PgFetchSettings {
+        version: PG_V13,
+        ..Default::default()
+    };
+    let mut pg = PgEmbed::new(pg_settings, fetch_settings).await?;
+    let _ = pg.setup().await;
+    pg.pg_settings.timeout = Some(Duration::from_millis(10));
+    let res = pg.start_db().await.err().map(|e| e.message).flatten();
+    assert_eq!(Some("timed out".to_string()), res);
 
     Ok(())
 }
