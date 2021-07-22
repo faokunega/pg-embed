@@ -1,3 +1,8 @@
+# v0.5.4
+___
+### Restructuring
+- Extracted command execution
+
 # v0.5.3
 ___
 ### Fix
