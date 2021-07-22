@@ -5,7 +5,7 @@ use env_logger::Env;
 
 use pg_embed::pg_enums::PgAuthMethod;
 use pg_embed::pg_errors::PgEmbedError;
-use pg_embed::pg_fetch::{PG_V13, PgFetchSettings};
+use pg_embed::pg_fetch::{PgFetchSettings, PG_V13};
 use pg_embed::postgres::{PgEmbed, PgSettings};
 
 pub async fn setup(
@@ -14,10 +14,9 @@ pub async fn setup(
     persistent: bool,
     migration_dir: Option<PathBuf>,
 ) -> Result<PgEmbed, PgEmbedError> {
-    let _ =
-        env_logger::Builder::from_env(
-            Env::default().default_filter_or("info")
-        ).is_test(true).try_init();
+    let _ = env_logger::Builder::from_env(Env::default().default_filter_or("info"))
+        .is_test(true)
+        .try_init();
     let pg_settings = PgSettings {
         database_dir,
         port,
@@ -36,4 +35,3 @@ pub async fn setup(
     pg.setup().await?;
     Ok(pg)
 }
-

@@ -190,16 +190,13 @@ where
 
     async fn execute(&mut self, timeout: Option<Duration>) -> Result<S, E> {
         let (sender, receiver) = tokio::sync::mpsc::channel::<LogOutputData>(1000);
-        {
-            let tx = sender.clone();
-            let stdout = self.process.stdout.take().unwrap();
-            let _ = tokio::spawn(async move { Self::handle_output(stdout, tx).await });
-        }
-        {
-            let stderr = self.process.stderr.take().unwrap();
-            let _ = tokio::spawn(async move { Self::handle_output(stderr, sender).await });
-        }
-        Self::log_output(receiver).await;
-        self.run_process().await
+        let res = self.run_process().await;
+        let stdout = self.process.stdout.take().unwrap();
+        let stderr = self.process.stderr.take().unwrap();
+        let tx = sender.clone();
+        let _ = tokio::task::spawn(async { Self::handle_output(stdout, tx).await });
+        let _ = tokio::task::spawn(async { Self::handle_output(stderr, sender).await });
+        let _ = tokio::task::spawn(async { Self::log_output(receiver).await });
+        res
     }
 }

@@ -46,8 +46,9 @@ async fn db_migration() -> Result<(), PgEmbedError> {
         5432,
         PathBuf::from("data_test/db"),
         false,
-        Some(PathBuf::from("migration_test"))
-    ).await?;
+        Some(PathBuf::from("migration_test")),
+    )
+    .await?;
     pg.start_db().await?;
     let db_name = "test";
     pg.create_database(&db_name).await?;
