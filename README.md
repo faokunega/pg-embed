@@ -21,7 +21,7 @@ will be available soon.
      ```toml
      # Cargo.toml
      [dependencies]
-     pg-embed = { version = "0.5", default-features = false, features = ["rt_tokio"] }
+     pg-embed = { version = "0.6", default-features = false, features = ["rt_tokio"] }
      ```
 
   *Library with sqlx migration support*
@@ -29,7 +29,7 @@ will be available soon.
      ```toml
      # Cargo.toml
      [dependencies]
-     pg-embed = "0.5"
+     pg-embed = "0.6"
      ```
 
 
