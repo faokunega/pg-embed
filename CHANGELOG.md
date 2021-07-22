@@ -2,6 +2,7 @@
 ___
 ### Feature
 - Timeout can now be disabled through setting PgSettings{.., timeout: None}
+
 ### Breaking Changes
 - PgSettings timeout attribute has been change to Option<Duration> (description above)
 
