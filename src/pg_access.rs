@@ -4,7 +4,6 @@
 
 use std::cell::Cell;
 use std::collections::HashMap;
-use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -13,7 +12,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 use tokio::time::{interval, Duration};
 
-use crate::pg_enums::{OperationSystem, PgAcquisitionStatus, PgAuthMethod};
+use crate::pg_enums::{OperationSystem, PgAcquisitionStatus};
 use crate::pg_errors::{PgEmbedError, PgEmbedErrorType};
 use crate::pg_fetch::PgFetchSettings;
 use crate::pg_types::{PgCommandSync, PgResult};

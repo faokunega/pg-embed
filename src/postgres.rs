@@ -4,24 +4,15 @@
 //! Start, stop, initialize the postgresql server.
 //! Create database clusters and databases.
 //!
-use io::{Error, ErrorKind};
-use std::cell::RefCell;
-use std::fs::read_dir;
-use std::io;
 use std::io::BufRead;
 use std::path::PathBuf;
-use std::process::{ExitStatus, Stdio};
+use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures::{StreamExt, TryFutureExt};
+use futures::TryFutureExt;
 use log::{error, info};
-use tokio::io::{AsyncBufReadExt, BufReader, Lines};
-use tokio::process::{Child, ChildStderr, ChildStdout};
-use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
-use tokio::time::error::Elapsed;
-use tokio::time::timeout;
 
 #[cfg(feature = "rt_tokio_migrate")]
 use sqlx_tokio::migrate::{MigrateDatabase, Migrator};
@@ -30,10 +21,10 @@ use sqlx_tokio::postgres::PgPoolOptions;
 #[cfg(feature = "rt_tokio_migrate")]
 use sqlx_tokio::Postgres;
 
-use crate::command_executor::{AsyncCommand, AsyncCommandExecutor};
+use crate::command_executor::AsyncCommand;
 use crate::pg_access::PgAccess;
 use crate::pg_commands::PgCommand;
-use crate::pg_enums::{PgAuthMethod, PgProcessType, PgServerStatus};
+use crate::pg_enums::{PgAuthMethod, PgServerStatus};
 use crate::pg_errors::{PgEmbedError, PgEmbedErrorType};
 use crate::pg_types::PgResult;
 use crate::{pg_fetch, pg_unpack};
@@ -172,10 +163,9 @@ impl PgEmbed {
             &self.pg_settings.user,
             &self.pg_settings.auth_method,
         )?;
-        executor.execute(None).await;
-        // let exit_status = executor.execute(None).await?;
-        // let mut server_status = self.server_status.lock().await;
-        // *server_status = exit_status;
+        let exit_status = executor.execute(None).await?;
+        let mut server_status = self.server_status.lock().await;
+        *server_status = exit_status;
         Ok(())
     }
 
@@ -195,10 +185,9 @@ impl PgEmbed {
             &self.pg_access.database_dir,
             &self.pg_settings.port,
         )?;
-        executor.execute(None).await;
-        // let exit_status = executor.execute(None).await?;
-        // let mut server_status = self.server_status.lock().await;
-        // *server_status = exit_status;
+        let exit_status = executor.execute(None).await?;
+        let mut server_status = self.server_status.lock().await;
+        *server_status = exit_status;
         Ok(())
     }
 
@@ -215,10 +204,9 @@ impl PgEmbed {
         self.shutting_down = true;
         let mut executor =
             PgCommand::stop_db_executor(&self.pg_access.pg_ctl_exe, &self.pg_access.database_dir)?;
-        executor.execute(None).await;
-        // let exit_status = executor.execute(None).await?;
-        // let mut server_status = self.server_status.lock().await;
-        // *server_status = exit_status;
+        let exit_status = executor.execute(None).await?;
+        let mut server_status = self.server_status.lock().await;
+        *server_status = exit_status;
         Ok(())
     }
 

@@ -1,21 +1,16 @@
 //!
 //! Process command creation and execution
 //!
-use std::cell::{Cell, RefCell};
 use std::error::Error;
 use std::ffi::OsStr;
-use std::io::ErrorKind;
 use std::marker;
 use std::process::Stdio;
-use std::sync::Arc;
 
 use async_trait::async_trait;
-use futures::TryFutureExt;
 use log;
-use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader, Lines};
-use tokio::process::{Child, ChildStdout};
+use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
+use tokio::process::Child;
 use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::task::JoinHandle;
 use tokio::time::Duration;
 
 ///
@@ -194,7 +189,7 @@ where
     }
 
     async fn execute(&mut self, timeout: Option<Duration>) -> Result<S, E> {
-        let (sender, mut receiver) = tokio::sync::mpsc::channel::<LogOutputData>(1000);
+        let (sender, receiver) = tokio::sync::mpsc::channel::<LogOutputData>(1000);
         {
             let tx = sender.clone();
             let stdout = self.process.stdout.take().unwrap();
