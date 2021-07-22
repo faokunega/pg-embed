@@ -9,37 +9,29 @@ use futures::TryFutureExt;
 use reqwest::Response;
 
 use crate::pg_enums::{Architecture, OperationSystem};
-use crate::pg_errors::PgEmbedError;
+use crate::pg_errors::{PgEmbedError, PgEmbedErrorType};
 use crate::pg_types::PgResult;
 
 /// Postgresql version struct (simple version wrapper)
-pub struct PostgresVersion(
-    pub &'static str,
-);
+pub struct PostgresVersion(pub &'static str);
 
 /// Latest postgres version 13
-pub const PG_V13: PostgresVersion =
-    PostgresVersion("13.2.0");
+pub const PG_V13: PostgresVersion = PostgresVersion("13.2.0");
 /// Latest postgres version 12
-pub const PG_V12: PostgresVersion =
-    PostgresVersion("12.6.0");
+pub const PG_V12: PostgresVersion = PostgresVersion("12.6.0");
 /// Latest pstgres version 11
-pub const PG_V11: PostgresVersion =
-    PostgresVersion("11.11.0");
+pub const PG_V11: PostgresVersion = PostgresVersion("11.11.0");
 /// Latest postgres version 10
-pub const PG_V10: PostgresVersion =
-    PostgresVersion("10.16.0");
+pub const PG_V10: PostgresVersion = PostgresVersion("10.16.0");
 /// Latest postgres version 9
-pub const PG_V9: PostgresVersion =
-    PostgresVersion("9.6.21");
+pub const PG_V9: PostgresVersion = PostgresVersion("9.6.21");
 
 /// Settings that determine the postgres binary to be fetched
 pub struct PgFetchSettings {
     /// The repository host
     pub host: String,
     /// The operation system
-    pub operating_system:
-    OperationSystem,
+    pub operating_system: OperationSystem,
     /// The cpu architecture
     pub architecture: Architecture,
     /// The postgresql version
@@ -60,13 +52,12 @@ impl Default for PgFetchSettings {
 impl PgFetchSettings {
     /// The platform string (*needed to determine the download path*)
     pub fn platform(&self) -> String {
-        let os = self
-            .operating_system
-            .to_string();
-        let arch =
-            if self.operating_system == OperationSystem::AlpineLinux {
-                format!("{}-{}", self.architecture.to_string(), "alpine")
-            } else { self.architecture.to_string() };
+        let os = self.operating_system.to_string();
+        let arch = if self.operating_system == OperationSystem::AlpineLinux {
+            format!("{}-{}", self.architecture.to_string(), "alpine")
+        } else {
+            self.architecture.to_string()
+        };
         format!("{}-{}", os, arch)
     }
 
@@ -75,8 +66,7 @@ impl PgFetchSettings {
     ///
     /// Returns the data of the downloaded binary in an `Ok([u8])` on success, otherwise returns an error.
     ///
-    pub async fn fetch_postgres(&self) -> PgResult<Box<Bytes>>
-    {
+    pub async fn fetch_postgres(&self) -> PgResult<Box<Bytes>> {
         let platform = &self.platform();
         let version = self.version.0;
         let download_url = format!(
@@ -86,16 +76,23 @@ impl PgFetchSettings {
             version,
             &platform,
             version);
-        let response: Response =
-            reqwest::get(download_url).map_err(|e|
-                { PgEmbedError::DownloadFailure(e) })
-                .await?;
+        let response: Response = reqwest::get(download_url)
+            .map_err(|e| PgEmbedError {
+                error_type: PgEmbedErrorType::DownloadFailure,
+                source: Some(Box::new(e)),
+                message: None,
+            })
+            .await?;
 
-        let content: Bytes = response.bytes().map_err(|e| PgEmbedError::ConversionFailure(e))
+        let content: Bytes = response
+            .bytes()
+            .map_err(|e| PgEmbedError {
+                error_type: PgEmbedErrorType::ConversionFailure,
+                source: Some(Box::new(e)),
+                message: None,
+            })
             .await?;
 
         Ok(Box::new(content))
     }
 }
-
-

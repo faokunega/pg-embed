@@ -32,7 +32,7 @@ pub enum LogType {
 ///
 pub trait ProcessStatus<T, E>
 where
-    E: Error,
+    E: Error + Send,
     Self: Send,
 {
     /// process entry status
@@ -42,7 +42,7 @@ where
     /// process error type
     fn error_type(&self) -> E;
     /// wrap error
-    fn wrap_error<F: Error>(&self, error: F) -> E;
+    fn wrap_error<F: Error + Send + 'static>(&self, error: F) -> E;
 }
 
 ///
@@ -60,8 +60,8 @@ pub struct LogOutputData {
 #[async_trait]
 pub trait AsyncCommand<S, E, P>
 where
-    E: Error,
-    P: ProcessStatus<S, E>,
+    E: Error + Send,
+    P: ProcessStatus<S, E> + Send,
     Self: Sized,
 {
     ///
@@ -161,7 +161,7 @@ where
             .process
             .wait()
             .await
-            .map_err(|e| self.process_type.wrap_error(&e))?;
+            .map_err(|e| self.process_type.wrap_error(e))?;
         if exit_status.success() {
             Ok(self.process_type.status_exit())
         } else {

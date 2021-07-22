@@ -5,7 +5,7 @@
 use std::error::Error;
 
 use crate::command_executor::ProcessStatus;
-use crate::pg_errors::PgEmbedError;
+use crate::pg_errors::{PgEmbedError, PgEmbedErrorType};
 
 ///
 /// Postgresql authentication method
@@ -78,14 +78,30 @@ impl ProcessStatus<PgServerStatus, PgEmbedError> for PgProcessType {
 
     fn error_type(&self) -> PgEmbedError {
         match self {
-            PgProcessType::InitDb => PgEmbedError::PgInitFailure(),
-            PgProcessType::StartDb => PgEmbedError::PgStartFailure(),
-            PgProcessType::StopDb => PgEmbedError::PgStopFailure(),
+            PgProcessType::InitDb => PgEmbedError {
+                error_type: PgEmbedErrorType::PgInitFailure,
+                source: None,
+                message: None,
+            },
+            PgProcessType::StartDb => PgEmbedError {
+                error_type: PgEmbedErrorType::PgStartFailure,
+                source: None,
+                message: None,
+            },
+            PgProcessType::StopDb => PgEmbedError {
+                error_type: PgEmbedErrorType::PgStopFailure,
+                source: None,
+                message: None,
+            },
         }
     }
 
-    fn wrap_error<E: Error>(&self, error: E) -> PgEmbedError {
-        PgEmbedError::PgError(error)
+    fn wrap_error<E: Error + Send + 'static>(&self, error: E) -> PgEmbedError {
+        PgEmbedError {
+            error_type: PgEmbedErrorType::PgError,
+            source: Some(Box::new(error)),
+            message: None,
+        }
     }
 }
 

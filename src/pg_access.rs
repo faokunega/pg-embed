@@ -14,7 +14,7 @@ use tokio::sync::Mutex;
 use tokio::time::{interval, Duration};
 
 use crate::pg_enums::{OperationSystem, PgAcquisitionStatus, PgAuthMethod};
-use crate::pg_errors::PgEmbedError;
+use crate::pg_errors::{PgEmbedError, PgEmbedErrorType};
 use crate::pg_fetch::PgFetchSettings;
 use crate::pg_types::{PgCommandSync, PgResult};
 
@@ -101,8 +101,10 @@ impl PgAccess {
     /// Returns PathBuf(cache_directory) on success, an error otherwise
     ///
     async fn create_cache_dir_structure(fetch_settings: &PgFetchSettings) -> PgResult<PathBuf> {
-        let cache_dir = dirs::cache_dir().ok_or_else(|| {
-            PgEmbedError::DirCreationError(Error::new(ErrorKind::Other, "cache dir error"))
+        let cache_dir = dirs::cache_dir().ok_or_else(|| PgEmbedError {
+            error_type: PgEmbedErrorType::InvalidPgUrl,
+            source: None,
+            message: None,
         })?;
         let os_string = match fetch_settings.operating_system {
             OperationSystem::Darwin | OperationSystem::Windows | OperationSystem::Linux => {
@@ -122,14 +124,22 @@ impl PgAccess {
         let mut cache_pg_embed = cache_dir.clone();
         cache_pg_embed.push(pg_path);
         tokio::fs::create_dir_all(&cache_pg_embed)
-            .map_err(|e| PgEmbedError::DirCreationError(e))
+            .map_err(|e| PgEmbedError {
+                error_type: PgEmbedErrorType::DirCreationError,
+                source: Some(Box::new(e)),
+                message: None,
+            })
             .await?;
         Ok(cache_pg_embed)
     }
 
     async fn create_db_dir_structure(db_dir: &PathBuf) -> PgResult<()> {
         tokio::fs::create_dir_all(db_dir)
-            .map_err(|e| PgEmbedError::DirCreationError(e))
+            .map_err(|e| PgEmbedError {
+                error_type: PgEmbedErrorType::DirCreationError,
+                source: Some(Box::new(e)),
+                message: None,
+            })
             .await
     }
 
@@ -234,10 +244,18 @@ impl PgAccess {
     ///
     pub async fn write_pg_zip(&self, bytes: &[u8]) -> PgResult<()> {
         let mut file: tokio::fs::File = tokio::fs::File::create(&self.zip_file_path.as_path())
-            .map_err(|e| PgEmbedError::WriteFileError(e))
+            .map_err(|e| PgEmbedError {
+                error_type: PgEmbedErrorType::WriteFileError,
+                source: Some(Box::new(e)),
+                message: None,
+            })
             .await?;
         file.write_all(&bytes)
-            .map_err(|e| PgEmbedError::WriteFileError(e))
+            .map_err(|e| PgEmbedError {
+                error_type: PgEmbedErrorType::WriteFileError,
+                source: Some(Box::new(e)),
+                message: None,
+            })
             .await?;
         Ok(())
     }
@@ -249,10 +267,16 @@ impl PgAccess {
     ///
     pub fn clean(&self) -> PgResult<()> {
         // not using tokio::fs async methods because clean() is called on drop
-        std::fs::remove_dir_all(self.database_dir.as_path())
-            .map_err(|e| PgEmbedError::PgCleanUpFailure(e))?;
-        std::fs::remove_file(self.pw_file_path.as_path())
-            .map_err(|e| PgEmbedError::PgCleanUpFailure(e))?;
+        std::fs::remove_dir_all(self.database_dir.as_path()).map_err(|e| PgEmbedError {
+            error_type: PgEmbedErrorType::PgCleanUpFailure,
+            source: Some(Box::new(e)),
+            message: None,
+        })?;
+        std::fs::remove_file(self.pw_file_path.as_path()).map_err(|e| PgEmbedError {
+            error_type: PgEmbedErrorType::PgCleanUpFailure,
+            source: Some(Box::new(e)),
+            message: None,
+        })?;
         Ok(())
     }
 
@@ -262,12 +286,18 @@ impl PgAccess {
     /// Remove all cached postgresql executables
     ///
     pub async fn purge() -> PgResult<()> {
-        let mut cache_dir = dirs::cache_dir().ok_or_else(|| {
-            PgEmbedError::ReadFileError(Error::new(ErrorKind::Other, "cache dir error"))
+        let mut cache_dir = dirs::cache_dir().ok_or_else(|| PgEmbedError {
+            error_type: PgEmbedErrorType::ReadFileError,
+            source: None,
+            message: Some(String::from("cache dir error")),
         })?;
         cache_dir.push(PG_EMBED_CACHE_DIR_NAME);
         let _ = tokio::fs::remove_dir_all(cache_dir.as_path())
-            .map_err(|e| PgEmbedError::PgPurgeFailure(e))
+            .map_err(|e| PgEmbedError {
+                error_type: PgEmbedErrorType::PgPurgeFailure,
+                source: Some(Box::new(e)),
+                message: None,
+            })
             .await;
         Ok(())
     }
@@ -278,11 +308,19 @@ impl PgAccess {
     pub async fn clean_up(database_dir: PathBuf, pw_file: PathBuf) -> PgResult<()> {
         tokio::fs::remove_dir_all(database_dir.as_path())
             .await
-            .map_err(|e| PgEmbedError::PgCleanUpFailure(e))?;
+            .map_err(|e| PgEmbedError {
+                error_type: PgEmbedErrorType::PgCleanUpFailure,
+                source: Some(Box::new(e)),
+                message: None,
+            })?;
 
         tokio::fs::remove_file(pw_file.as_path())
             .await
-            .map_err(|e| PgEmbedError::PgCleanUpFailure(e))
+            .map_err(|e| PgEmbedError {
+                error_type: PgEmbedErrorType::PgCleanUpFailure,
+                source: Some(Box::new(e)),
+                message: None,
+            })
     }
 
     ///
@@ -292,11 +330,19 @@ impl PgAccess {
     ///
     pub async fn create_password_file(&self, password: &[u8]) -> PgResult<()> {
         let mut file: tokio::fs::File = tokio::fs::File::create(self.pw_file_path.as_path())
-            .map_err(|e| PgEmbedError::WriteFileError(e))
+            .map_err(|e| PgEmbedError {
+                error_type: PgEmbedErrorType::WriteFileError,
+                source: Some(Box::new(e)),
+                message: None,
+            })
             .await?;
         let _ = file
             .write(password)
-            .map_err(|e| PgEmbedError::WriteFileError(e))
+            .map_err(|e| PgEmbedError {
+                error_type: PgEmbedErrorType::WriteFileError,
+                source: Some(Box::new(e)),
+                message: None,
+            })
             .await?;
         Ok(())
     }

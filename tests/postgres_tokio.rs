@@ -15,13 +15,22 @@ mod common;
 #[serial]
 async fn postgres_server_start_stop() -> Result<(), PgEmbedError> {
     let mut pg = common::setup(5432, PathBuf::from("data_test/db"), false, None).await?;
-    assert_eq!(pg.server_status, PgServerStatus::Initialized);
+    {
+        let server_status = *pg.server_status.lock().await;
+        assert_eq!(server_status, PgServerStatus::Initialized);
+    }
 
     pg.start_db().await?;
-    assert_eq!(pg.server_status, PgServerStatus::Started);
+    {
+        let server_status = *pg.server_status.lock().await;
+        assert_eq!(server_status, PgServerStatus::Started);
+    }
 
     pg.stop_db().await?;
-    assert_eq!(pg.server_status, PgServerStatus::Stopped);
+    {
+        let server_status = *pg.server_status.lock().await;
+        assert_eq!(server_status, PgServerStatus::Stopped);
+    }
 
     Ok(())
 }
@@ -53,27 +62,35 @@ async fn postgres_server_multiple_concurrent() -> Result<(), PgEmbedError> {
     ];
 
     let wrap_with_mutex =
-        |val: Result<PgEmbed, PgEmbedError>|
-            val.map(|pg| Mutex::new(pg)).unwrap();
+        |val: Result<PgEmbed, PgEmbedError>| val.map(|pg| Mutex::new(pg)).unwrap();
 
-    let pgs: Vec<Mutex<PgEmbed>> =
-        futures::future::join_all(tasks)
-            .await
-            .into_iter()
-            .map(wrap_with_mutex)
-            .collect();
+    let pgs: Vec<Mutex<PgEmbed>> = futures::future::join_all(tasks)
+        .await
+        .into_iter()
+        .map(wrap_with_mutex)
+        .collect();
 
-    futures::stream::iter(&pgs).for_each_concurrent(None, |pg| async move {
-        let mut pg = pg.lock().await;
-        let _ = pg.start_db().await;
-        assert_eq!(pg.server_status, PgServerStatus::Started);
-    }).await;
+    futures::stream::iter(&pgs)
+        .for_each_concurrent(None, |pg| async move {
+            let mut pg = pg.lock().await;
+            let _ = pg.start_db().await;
+            {
+                let server_status = *pg.server_status.lock().await;
+                assert_eq!(server_status, PgServerStatus::Started);
+            }
+        })
+        .await;
 
-    futures::stream::iter(&pgs).for_each_concurrent(None, |pg| async move {
-        let mut pg = pg.lock().await;
-        let _ = pg.stop_db().await;
-        assert_eq!(pg.server_status, PgServerStatus::Stopped);
-    }).await;
+    futures::stream::iter(&pgs)
+        .for_each_concurrent(None, |pg| async move {
+            let mut pg = pg.lock().await;
+            let _ = pg.stop_db().await;
+            {
+                let server_status = *pg.server_status.lock().await;
+                assert_eq!(server_status, PgServerStatus::Stopped);
+            }
+        })
+        .await;
 
     Ok(())
 }
@@ -85,12 +102,7 @@ async fn postgres_server_persistent_true() -> Result<(), PgEmbedError> {
     let mut database_dir = PathBuf::new();
     let mut pw_file_path = PathBuf::new();
     {
-        let pg = common::setup(
-            5432,
-            db_path.clone(),
-            true,
-            None,
-        ).await?;
+        let pg = common::setup(5432, db_path.clone(), true, None).await?;
         database_dir.clone_from(&pg.pg_access.database_dir);
         pw_file_path.clone_from(&pg.pg_access.pw_file_path);
         let file_exists = PgAccess::pg_version_file_exists(&db_path).await?;
@@ -112,12 +124,7 @@ async fn postgres_server_persistent_true() -> Result<(), PgEmbedError> {
 async fn postgres_server_persistent_false() -> Result<(), PgEmbedError> {
     let db_path = PathBuf::from("data_test/db");
     {
-        let _pg = common::setup(
-            5432,
-            db_path.clone(),
-            false,
-            None,
-        ).await?;
+        let _pg = common::setup(5432, db_path.clone(), false, None).await?;
         let file_exists = PgAccess::pg_version_file_exists(&db_path).await?;
         assert_eq!(true, file_exists);
     }

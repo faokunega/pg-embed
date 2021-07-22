@@ -1,155 +1,78 @@
 //!
 //! Errors
 //!
+use std::error::Error;
+
+use std::fmt;
+use std::fmt::Formatter;
 use thiserror::Error;
+
+///
+/// PgEmbed errors
+#[derive(Error, Debug)]
+pub struct PgEmbedError {
+    pub error_type: PgEmbedErrorType,
+    pub source: Option<Box<dyn Error + Send>>,
+    pub message: Option<String>,
+}
+
+impl fmt::Display for PgEmbedError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "error_type: {:?}\nsource: \n{:?}\nmessage: \n{:?}\n",
+            self.error_type, self.source, self.message
+        )
+    }
+}
 
 ///
 /// Common pg_embed errors, independent from features used
 ///
-#[derive(Error, Clone, Debug)]
-pub enum PgEmbedError {
+#[derive(Debug)]
+pub enum PgEmbedErrorType {
     /// Invalid postgresql binaries download url
-    #[error("invalid postgresql binaries download url: `{0}`")]
-    InvalidPgUrl(String),
+    InvalidPgUrl,
     /// Invalid postgresql binaries package
-    #[error("invalid postgresql binaries package. `{0}`")]
-    InvalidPgPackage(String),
+    InvalidPgPackage,
     /// Could not write file
-    #[error("could not write file")]
-    WriteFileError(std::io::Error),
+    WriteFileError,
     /// Could not read file
-    #[error("could not read file")]
-    ReadFileError(std::io::Error),
+    ReadFileError,
     /// Could not create directory
-    #[error("could not create directory")]
-    DirCreationError(std::io::Error),
+    DirCreationError,
     /// Failed to unpack postgresql binaries
-    #[error("failed to unpack postgresql binaries`")]
-    UnpackFailure(#[from] archiver_rs::ArchiverError),
+    UnpackFailure,
     /// Postgresql could not be started
-    #[error("postgresql could not be started")]
-    PgStartFailure(),
+    PgStartFailure,
     /// Postgresql could not be stopped
-    #[error("postgresql could not be stopped")]
-    PgStopFailure(),
+    PgStopFailure,
     /// Postgresql could not be initialized
-    #[error("postgresql could not be initialized")]
-    PgInitFailure(),
+    PgInitFailure,
     /// Clean up error
-    #[error("clean up error")]
-    PgCleanUpFailure(std::io::Error),
+    PgCleanUpFailure,
     /// Purging error
-    #[error("purging error")]
-    PgPurgeFailure(std::io::Error),
+    PgPurgeFailure,
     /// Buffer read error
-    #[error("buffer read error")]
-    PgBufferReadError(std::io::Error),
+    PgBufferReadError,
     /// Lock error
-    #[error("lock error")]
-    PgLockError(),
+    PgLockError,
     /// Child process error
-    #[error("process error")]
-    PgProcessError(std::io::Error),
+    PgProcessError,
     /// Timed out error
-    #[error("timed out error")]
-    PgTimedOutError(),
+    PgTimedOutError,
     /// Task join error
-    #[error("task join error")]
-    PgTaskJoinError(),
+    PgTaskJoinError,
     /// Error wrapper
-    #[error("error wrapper")]
-    PgError(#[from] Box<dyn std::error::Error>),
+    PgError,
     /// Postgresql binaries download failure
-    #[error("postgresql binaries download failure")]
-    #[cfg(any(
-        feature = "rt_tokio",
-        feature = "rt_tokio_migrate",
-        feature = "rt_actix",
-        feature = "rt_actix_migrate"
-    ))]
-    DownloadFailure(reqwest::Error),
+    DownloadFailure,
     /// Request response bytes convertion failure
-    #[error("conversion failure")]
-    #[cfg(any(
-        feature = "rt_tokio",
-        feature = "rt_tokio_migrate",
-        feature = "rt_actix",
-        feature = "rt_actix_migrate"
-    ))]
-    ConversionFailure(reqwest::Error),
+    ConversionFailure,
     /// Channel send error
-    #[error("channel send error")]
-    #[cfg(any(
-        feature = "rt_tokio",
-        feature = "rt_tokio_migrate",
-        feature = "rt_actix",
-        feature = "rt_actix_migrate"
-    ))]
-    SendFailure(),
-    /// Postgresql binaries download failure
-    #[error("postgresql binaries download failure")]
-    #[cfg(not(any(
-        feature = "rt_tokio",
-        feature = "rt_tokio_migrate",
-        feature = "rt_actix",
-        feature = "rt_actix_migrate"
-    )))]
-    DownloadFailure(surf::Error),
-    /// Request response bytes convertion failure
-    #[error("conversion failure")]
-    #[cfg(not(any(
-        feature = "rt_tokio",
-        feature = "rt_tokio_migrate",
-        feature = "rt_actix",
-        feature = "rt_actix_migrate"
-    )))]
-    ConversionFailure(surf::Error),
+    SendFailure,
     /// sqlx query error
-    #[error("query error")]
-    #[cfg(any(feature = "rt_tokio_migrate"))]
-    SqlQueryError(#[from] sqlx_tokio::Error),
+    SqlQueryError,
     /// migration error
-    #[error("migration error")]
-    #[cfg(any(feature = "rt_tokio_migrate"))]
-    MigrationError(#[from] sqlx_tokio::migrate::MigrateError),
-    /// sqlx query error
-    #[error("query error")]
-    #[cfg(not(any(
-        feature = "rt_tokio",
-        feature = "rt_tokio_migrate",
-        feature = "rt_actix",
-        feature = "rt_actix_migrate",
-        feature = "rt_async_std"
-    )))]
-    SqlQueryError(#[from] sqlx_async_std::Error),
-    /// migration error
-    #[error("migration error")]
-    #[cfg(not(any(
-        feature = "rt_tokio",
-        feature = "rt_tokio_migrate",
-        feature = "rt_actix",
-        feature = "rt_actix_migrate",
-        feature = "rt_async_std"
-    )))]
-    MigrationError(#[from] sqlx_async_std::migrate::MigrateError),
-    /// sqlx query error
-    #[error("query error")]
-    #[cfg(not(any(
-        feature = "rt_tokio",
-        feature = "rt_tokio_migrate",
-        feature = "rt_actix",
-        feature = "rt_async_std_migrate",
-        feature = "rt_async_std"
-    )))]
-    SqlQueryError(#[from] sqlx_actix::Error),
-    /// migration error
-    #[error("migration error")]
-    #[cfg(not(any(
-        feature = "rt_tokio",
-        feature = "rt_tokio_migrate",
-        feature = "rt_actix",
-        feature = "rt_async_std_migrate",
-        feature = "rt_async_std"
-    )))]
-    MigrationError(#[from] sqlx_actix::migrate::MigrateError),
+    MigrationError,
 }

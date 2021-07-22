@@ -47,6 +47,7 @@ impl PgCommand {
             AsyncCommandExecutor::<PgServerStatus, PgEmbedError, PgProcessType>::new(
                 init_db_executable,
                 args,
+                PgProcessType::InitDb,
             )?;
 
         Ok(command_executor)
@@ -74,6 +75,7 @@ impl PgCommand {
             AsyncCommandExecutor::<PgServerStatus, PgEmbedError, PgProcessType>::new(
                 pg_ctl_executable,
                 args,
+                PgProcessType::StartDb,
             )?;
 
         Ok(command_executor)
@@ -92,6 +94,7 @@ impl PgCommand {
             AsyncCommandExecutor::<PgServerStatus, PgEmbedError, PgProcessType>::new(
                 pg_ctl_executable,
                 args,
+                PgProcessType::StopDb,
             )?;
 
         Ok(command_executor)

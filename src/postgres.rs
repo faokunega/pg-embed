@@ -34,8 +34,7 @@ use crate::command_executor::{AsyncCommand, AsyncCommandExecutor};
 use crate::pg_access::PgAccess;
 use crate::pg_commands::PgCommand;
 use crate::pg_enums::{PgAuthMethod, PgProcessType, PgServerStatus};
-use crate::pg_errors::PgEmbedError;
-use crate::pg_errors::PgEmbedError::PgTaskJoinError;
+use crate::pg_errors::{PgEmbedError, PgEmbedErrorType};
 use crate::pg_types::PgResult;
 use crate::{pg_fetch, pg_unpack};
 
@@ -238,7 +237,11 @@ impl PgEmbed {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| PgEmbedError::PgError(Box::new(e)))?;
+            .map_err(|e| PgEmbedError {
+                error_type: PgEmbedErrorType::PgError,
+                source: Some(Box::new(e)),
+                message: None,
+            })?;
 
         self.handle_process_io_sync(process)
     }
@@ -263,7 +266,13 @@ impl PgEmbed {
         feature = "rt_actix_migrate"
     ))]
     pub async fn create_database(&self, db_name: &str) -> PgResult<()> {
-        Postgres::create_database(&self.full_db_uri(db_name)).await?;
+        Postgres::create_database(&self.full_db_uri(db_name))
+            .map_err(|e| PgEmbedError {
+                error_type: PgEmbedErrorType::PgTaskJoinError,
+                source: Some(Box::new(e)),
+                message: None,
+            })
+            .await?;
         Ok(())
     }
 
@@ -276,7 +285,13 @@ impl PgEmbed {
         feature = "rt_actix_migrate"
     ))]
     pub async fn drop_database(&self, db_name: &str) -> PgResult<()> {
-        Postgres::drop_database(&self.full_db_uri(db_name)).await?;
+        Postgres::drop_database(&self.full_db_uri(db_name))
+            .map_err(|e| PgEmbedError {
+                error_type: PgEmbedErrorType::PgTaskJoinError,
+                source: Some(Box::new(e)),
+                message: None,
+            })
+            .await?;
         Ok(())
     }
 
@@ -289,7 +304,13 @@ impl PgEmbed {
         feature = "rt_actix_migrate"
     ))]
     pub async fn database_exists(&self, db_name: &str) -> PgResult<bool> {
-        let result = Postgres::database_exists(&self.full_db_uri(db_name)).await?;
+        let result = Postgres::database_exists(&self.full_db_uri(db_name))
+            .map_err(|e| PgEmbedError {
+                error_type: PgEmbedErrorType::PgTaskJoinError,
+                source: Some(Box::new(e)),
+                message: None,
+            })
+            .await?;
         Ok(result)
     }
 
@@ -312,11 +333,28 @@ impl PgEmbed {
     ))]
     pub async fn migrate(&self, db_name: &str) -> PgResult<()> {
         if let Some(migration_dir) = &self.pg_settings.migration_dir {
-            let m = Migrator::new(migration_dir.as_path()).await?;
+            let m = Migrator::new(migration_dir.as_path())
+                .map_err(|e| PgEmbedError {
+                    error_type: PgEmbedErrorType::MigrationError,
+                    source: Some(Box::new(e)),
+                    message: None,
+                })
+                .await?;
             let pool = PgPoolOptions::new()
                 .connect(&self.full_db_uri(db_name))
+                .map_err(|e| PgEmbedError {
+                    error_type: PgEmbedErrorType::SqlQueryError,
+                    source: Some(Box::new(e)),
+                    message: None,
+                })
                 .await?;
-            m.run(&pool).await?;
+            m.run(&pool)
+                .map_err(|e| PgEmbedError {
+                    error_type: PgEmbedErrorType::MigrationError,
+                    source: Some(Box::new(e)),
+                    message: None,
+                })
+                .await?;
         }
         Ok(())
     }
