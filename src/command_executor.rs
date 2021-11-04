@@ -13,6 +13,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::process::Child;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::Duration;
+use std::str;
 
 ///
 /// Output logging type
@@ -165,6 +166,7 @@ where
         }
     }
 
+    #[cfg(target_os = "unix")]
     async fn command_execution(&mut self) -> Result<S, E> {
         let (sender, receiver) = tokio::sync::mpsc::channel::<LogOutputData>(1000);
         let res = self.run_process().await;
@@ -176,6 +178,21 @@ where
         let _ = tokio::task::spawn(async { Self::log_output(receiver).await });
         res
     }
+
+    #[cfg(target_os = "windows")]
+    async fn command_execution(&mut self) -> Result<S, E> {
+        let (sender, receiver) = tokio::sync::mpsc::channel::<LogOutputData>(1000);
+        let res = self.run_process().await;
+        let stdout = self.process.stdout.take().unwrap();
+        //TODO: find another way to use stderr on windows
+        // let stderr = self.process.stderr.take().unwrap();
+        let tx = sender.clone();
+        let _ = tokio::task::spawn(async { Self::handle_output(stdout, tx).await });
+        // let _ = tokio::task::spawn(async { Self::handle_output(stderr, sender).await });
+        let _ = tokio::task::spawn(async { Self::log_output(receiver).await });
+        res
+    }
+
 }
 
 #[async_trait]
