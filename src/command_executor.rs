@@ -166,7 +166,7 @@ where
         }
     }
 
-    #[cfg(any(target_os = "unix", target_os = "macos"))]
+    #[cfg(not(target_os = "windows"))]
     async fn command_execution(&mut self) -> Result<S, E> {
         let (sender, receiver) = tokio::sync::mpsc::channel::<LogOutputData>(1000);
         let res = self.run_process().await;
