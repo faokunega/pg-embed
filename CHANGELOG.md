@@ -1,3 +1,15 @@
+# v0.6.5
+___
+### Fix
+The errors introduced in v0.6.1 - v0.6.4 got fixed.
+Big thanks to nicoulaj for his contribution
+
+# v0.6.1 - v0.6.4
+___
+### Important notes
+Due to error fixing for the Windows OS console some errors where introduced on other platforms.
+Please use a newer or older version to prevent getting those errors.
+
 # v0.6.0
 ___
 ### Feature
