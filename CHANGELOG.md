@@ -8,7 +8,7 @@ Big thanks to nicoulaj for his contribution
 ___
 ### Important notes
 Due to error fixing for the Windows OS console some errors where introduced on other platforms.
-Please use a newer or older version to prevent getting those errors.
+Please use a newer version to prevent getting those errors.
 
 # v0.6.0
 ___
