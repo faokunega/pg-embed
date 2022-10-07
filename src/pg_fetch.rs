@@ -25,7 +25,7 @@ pub const PG_V11: PostgresVersion = PostgresVersion("11.15.0");
 /// Latest postgres version 10
 pub const PG_V10: PostgresVersion = PostgresVersion("10.20.0");
 /// Latest postgres version 9
-pub const PG_V9: PostgresVersion = PostgresVersion("9.6.21");
+pub const PG_V9: PostgresVersion = PostgresVersion("9.6.24");
 
 /// Settings that determine the postgres binary to be fetched
 pub struct PgFetchSettings {
