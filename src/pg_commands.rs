@@ -59,7 +59,7 @@ impl PgCommand {
     pub fn start_db_executor(
         pg_ctl_exe: &PathBuf,
         database_dir: &PathBuf,
-        port: &i16,
+        port: &u16,
     ) -> PgResult<AsyncCommandExecutor<PgServerStatus, PgEmbedError, PgProcessType>> {
         let pg_ctl_executable = pg_ctl_exe.as_os_str();
         let port_arg = format!("-F -p {}", port.to_string());

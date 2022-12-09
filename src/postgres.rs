@@ -36,7 +36,7 @@ pub struct PgSettings {
     /// postgresql database directory
     pub database_dir: PathBuf,
     /// postgresql port
-    pub port: i16,
+    pub port: u16,
     /// postgresql user name
     pub user: String,
     /// postgresql password

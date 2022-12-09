@@ -9,7 +9,7 @@ use pg_embed::pg_fetch::{PgFetchSettings, PG_V13};
 use pg_embed::postgres::{PgEmbed, PgSettings};
 
 pub async fn setup(
-    port: i16,
+    port: u16,
     database_dir: PathBuf,
     persistent: bool,
     migration_dir: Option<PathBuf>,
