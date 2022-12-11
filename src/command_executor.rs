@@ -6,14 +6,12 @@ use std::ffi::OsStr;
 use std::marker;
 use std::process::Stdio;
 
-use crate::pg_errors::{PgEmbedError, PgEmbedErrorType};
 use async_trait::async_trait;
 use log;
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::process::Child;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::Duration;
-use std::str;
 
 ///
 /// Output logging type
