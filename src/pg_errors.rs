@@ -12,7 +12,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub struct PgEmbedError {
     pub error_type: PgEmbedErrorType,
-    pub source: Option<Box<dyn Error + Send>>,
+    pub source: Option<Box<dyn Error + Sync + Send>>,
     pub message: Option<String>,
 }
 

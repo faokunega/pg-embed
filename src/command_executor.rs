@@ -39,7 +39,7 @@ where
     /// process error type
     fn error_type(&self) -> E;
     /// wrap error
-    fn wrap_error<F: Error + Send + 'static>(&self, error: F, message: Option<String>) -> E;
+    fn wrap_error<F: Error + Sync + Send + 'static>(&self, error: F, message: Option<String>) -> E;
 }
 
 ///

@@ -96,7 +96,7 @@ impl ProcessStatus<PgServerStatus, PgEmbedError> for PgProcessType {
         }
     }
 
-    fn wrap_error<E: Error + Send + 'static>(
+    fn wrap_error<E: Error + Sync + Send + 'static>(
         &self,
         error: E,
         message: Option<String>,
