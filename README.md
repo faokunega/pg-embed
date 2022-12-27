@@ -9,9 +9,6 @@ Run a Postgresql database locally on Linux, MacOS or Windows as part of another 
 
 The currently supported async runtime for **pg-embed** is [tokio](https://crates.io/crates/tokio).
 
-Support for [async-std](https://crates.io/crates/async-std) and [actix](https://crates.io/crates/actix) is planned and
-will be available soon.
-
 # Usage
 
 - Add pg-embed to your Cargo.toml
@@ -21,7 +18,7 @@ will be available soon.
      ```toml
      # Cargo.toml
      [dependencies]
-     pg-embed = { version = "0.6", default-features = false, features = ["rt_tokio"] }
+     pg-embed = { version = "0.7", default-features = false, features = ["rt_tokio"] }
      ```
 
   *Library with sqlx migration support*
@@ -29,7 +26,7 @@ will be available soon.
      ```toml
      # Cargo.toml
      [dependencies]
-     pg-embed = "0.6"
+     pg-embed = "0.7"
      ```
 
 
