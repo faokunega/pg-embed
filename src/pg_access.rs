@@ -10,12 +10,13 @@ use std::sync::Arc;
 use futures::TryFutureExt;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
-use tokio::time::{interval, Duration};
 
 use crate::pg_enums::{OperationSystem, PgAcquisitionStatus};
 use crate::pg_errors::{PgEmbedError, PgEmbedErrorType};
-use crate::pg_fetch::PgFetchSettings;
+use crate::pg_fetch::{PgFetchSettings};
 use crate::pg_types::{PgCommandSync, PgResult};
+use crate::pg_unpack;
+
 
 lazy_static! {
     ///
@@ -50,6 +51,8 @@ pub struct PgAccess {
     /// Postgresql database version file
     /// used for internal checks
     pg_version_file: PathBuf,
+    /// Fetch settings
+    fetch_settings: PgFetchSettings,
 }
 
 impl PgAccess {
@@ -91,6 +94,7 @@ impl PgAccess {
             pw_file_path: pw_file,
             zip_file_path,
             pg_version_file,
+            fetch_settings: fetch_settings.clone(),
         })
     }
 
@@ -143,6 +147,28 @@ impl PgAccess {
     }
 
     ///
+    /// Download and unpack postgres binaries
+    ///
+    pub async fn maybe_acquire_postgres(&self) -> PgResult<()> {
+        let mut lock = ACQUIRED_PG_BINS.lock().await;
+
+        if self.pg_executables_cached().await? {
+            return Ok(());
+        }
+
+        lock.insert(self.cache_dir.clone(), PgAcquisitionStatus::InProgress);
+        let pg_bin_data = self.fetch_settings.fetch_postgres().await?;
+        self.write_pg_zip(&pg_bin_data).await?;
+        pg_unpack::unpack_postgres(&self.zip_file_path, &self.cache_dir)
+            .await?;
+
+        lock.insert(self.cache_dir.clone(), PgAcquisitionStatus::Finished);
+        Ok(())
+
+    }
+
+
+    ///
     /// Check if postgresql executables are already cached
     ///
     pub async fn pg_executables_cached(&self) -> PgResult<bool> {
@@ -153,7 +179,7 @@ impl PgAccess {
     /// Check if database files exist
     ///
     pub async fn db_files_exist(&self) -> PgResult<bool> {
-        Self::path_exists(self.pg_version_file.as_path()).await
+        Ok(self.pg_executables_cached().await? && Self::path_exists(self.pg_version_file.as_path()).await?)
     }
 
     ///
@@ -182,30 +208,6 @@ impl PgAccess {
     }
 
     ///
-    /// Mark postgresql binaries acquisition in progress
-    ///
-    /// Used while acquiring postgresql binaries, so that no two instances
-    /// of PgEmbed try to acquire the same resources
-    ///
-    pub async fn mark_acquisition_in_progress(&self) -> PgResult<()> {
-        let mut lock = ACQUIRED_PG_BINS.lock().await;
-        lock.insert(self.cache_dir.clone(), PgAcquisitionStatus::InProgress);
-        Ok(())
-    }
-
-    ///
-    /// Mark postgresql binaries acquisition finished
-    ///
-    /// Used when acquiring postgresql has finished, so that other instances
-    /// of PgEmbed don't try to reacquire resources
-    ///
-    pub async fn mark_acquisition_finished(&self) -> PgResult<()> {
-        let mut lock = ACQUIRED_PG_BINS.lock().await;
-        lock.insert(self.cache_dir.clone(), PgAcquisitionStatus::Finished);
-        Ok(())
-    }
-
-    ///
     /// Check postgresql acquisition status
     ///
     pub async fn acquisition_status(&self) -> PgAcquisitionStatus {
@@ -218,30 +220,9 @@ impl PgAccess {
     }
 
     ///
-    /// Determine if postgresql binaries acquisition is needed
-    ///
-    pub async fn acquisition_needed(&self) -> PgResult<bool> {
-        if !self.pg_executables_cached().await? {
-            match self.acquisition_status().await {
-                PgAcquisitionStatus::InProgress => {
-                    let mut interval = interval(Duration::from_millis(100));
-                    while self.acquisition_status().await == PgAcquisitionStatus::InProgress {
-                        interval.tick().await;
-                    }
-                    Ok(false)
-                }
-                PgAcquisitionStatus::Finished => Ok(false),
-                PgAcquisitionStatus::Undefined => Ok(true),
-            }
-        } else {
-            Ok(false)
-        }
-    }
-
-    ///
     /// Write pg binaries zip to postgresql cache directory
     ///
-    pub async fn write_pg_zip(&self, bytes: &[u8]) -> PgResult<()> {
+    async fn write_pg_zip(&self, bytes: &[u8]) -> PgResult<()> {
         let mut file: tokio::fs::File = tokio::fs::File::create(&self.zip_file_path.as_path())
             .map_err(|e| PgEmbedError {
                 error_type: PgEmbedErrorType::WriteFileError,

@@ -13,6 +13,7 @@ use crate::pg_errors::{PgEmbedError, PgEmbedErrorType};
 use crate::pg_types::PgResult;
 
 /// Postgresql version struct (simple version wrapper)
+#[derive(Debug, Copy, Clone)]
 pub struct PostgresVersion(pub &'static str);
 /// Latest postgres version 15
 pub const PG_V15: PostgresVersion = PostgresVersion("15.1.0");
@@ -30,6 +31,7 @@ pub const PG_V10: PostgresVersion = PostgresVersion("10.23.0");
 pub const PG_V9: PostgresVersion = PostgresVersion("9.6.24");
 
 /// Settings that determine the postgres binary to be fetched
+#[derive(Debug, Clone)]
 pub struct PgFetchSettings {
     /// The repository host
     pub host: String,

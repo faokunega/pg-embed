@@ -27,7 +27,7 @@ use crate::pg_commands::PgCommand;
 use crate::pg_enums::{PgAuthMethod, PgServerStatus};
 use crate::pg_errors::{PgEmbedError, PgEmbedErrorType};
 use crate::pg_types::PgResult;
-use crate::{pg_fetch, pg_unpack};
+use crate::pg_fetch;
 
 ///
 /// Database settings
@@ -117,9 +117,7 @@ impl PgEmbed {
     /// Download, unpack, create password file and database
     ///
     pub async fn setup(&mut self) -> PgResult<()> {
-        if self.pg_access.acquisition_needed().await? {
-            self.acquire_postgres().await?;
-        }
+        self.pg_access.maybe_acquire_postgres().await?;
         self.pg_access
             .create_password_file(self.pg_settings.password.as_bytes())
             .await?;
@@ -127,21 +125,8 @@ impl PgEmbed {
             let mut server_status = self.server_status.lock().await;
             *server_status = PgServerStatus::Initialized;
         } else {
-            &self.init_db().await?;
+            let _r = &self.init_db().await?;
         }
-        Ok(())
-    }
-
-    ///
-    /// Download and unpack postgres binaries
-    ///
-    pub async fn acquire_postgres(&self) -> PgResult<()> {
-        self.pg_access.mark_acquisition_in_progress().await?;
-        let pg_bin_data = &self.fetch_settings.fetch_postgres().await?;
-        self.pg_access.write_pg_zip(&pg_bin_data).await?;
-        pg_unpack::unpack_postgres(&self.pg_access.zip_file_path, &self.pg_access.cache_dir)
-            .await?;
-        self.pg_access.mark_acquisition_finished().await?;
         Ok(())
     }
 

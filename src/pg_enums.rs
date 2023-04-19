@@ -120,7 +120,7 @@ impl ToString for PgProcessType {
 }
 
 /// The operation systems enum
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum OperationSystem {
     Darwin,
     Windows,
@@ -159,7 +159,7 @@ impl Default for OperationSystem {
 }
 
 /// The cpu architectures enum
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Architecture {
     Amd64,
     I386,
