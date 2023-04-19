@@ -159,6 +159,7 @@ impl PgAccess {
         lock.insert(self.cache_dir.clone(), PgAcquisitionStatus::InProgress);
         let pg_bin_data = self.fetch_settings.fetch_postgres().await?;
         self.write_pg_zip(&pg_bin_data).await?;
+        log::debug!("Unpacking postgres binaries {} {}", self.zip_file_path.display(), self.cache_dir.display());
         pg_unpack::unpack_postgres(&self.zip_file_path, &self.cache_dir)
             .await?;
 
@@ -237,6 +238,12 @@ impl PgAccess {
                 message: None,
             })
             .await?;
+        file.sync_data()
+            .map_err(|e| PgEmbedError {
+                error_type: PgEmbedErrorType::WriteFileError,
+                source: Some(Box::new(e)),
+                message: None,
+            }).await?;
         Ok(())
     }
 

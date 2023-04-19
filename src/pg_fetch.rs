@@ -16,7 +16,7 @@ use crate::pg_types::PgResult;
 #[derive(Debug, Copy, Clone)]
 pub struct PostgresVersion(pub &'static str);
 /// Latest postgres version 15
-pub const PG_V15: PostgresVersion = PostgresVersion("15.1.0");
+pub const PG_V15: PostgresVersion = PostgresVersion("15.2.0");
 /// Latest postgres version 14
 pub const PG_V14: PostgresVersion = PostgresVersion("14.6.0");
 /// Latest postgres version 13
@@ -71,7 +71,7 @@ impl PgFetchSettings {
     ///
     /// Returns the data of the downloaded binary in an `Ok([u8])` on success, otherwise returns an error.
     ///
-    pub async fn fetch_postgres(&self) -> PgResult<Box<Bytes>> {
+    pub async fn fetch_postgres(&self) -> PgResult<Bytes> {
         let platform = &self.platform();
         let version = self.version.0;
         let download_url = format!(
@@ -98,6 +98,9 @@ impl PgFetchSettings {
             })
             .await?;
 
-        Ok(Box::new(content))
+        log::debug!("Downloaded {} bytes", content.len());
+        log::trace!("First 1024 bytes: {:?}", &String::from_utf8_lossy(&content[..1024]));
+
+        Ok(content)
     }
 }

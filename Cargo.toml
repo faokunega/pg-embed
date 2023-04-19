@@ -17,14 +17,13 @@ default = ["rt_tokio_migrate"]
 rt_tokio = ["tokio", "reqwest"]
 rt_tokio_migrate = ["tokio", "reqwest", "sqlx_tokio"]
 # please don't select the following features
-rt_async_std = ["async-std", "surf"]
+rt_async_std = ["async-std"]
 rt_actix = ["tokio", "reqwest"]
-rt_async_std_migrate = ["async-std", "surf", "sqlx_async_std"]
+rt_async_std_migrate = ["async-std", "sqlx_async_std"]
 rt_actix_migrate = ["tokio", "reqwest", "sqlx_actix"]
 
 [dependencies]
 reqwest = { version = "0.11", optional = true }
-surf = { version = "2.2", optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
 async-std = { version = "1.9.0", features = ["attributes"], optional = true }
 futures = "0.3"

@@ -18,7 +18,7 @@ fn unzip_txz(zip_file_path: &PathBuf, cache_dir: &PathBuf) -> Result<PathBuf, Pg
     let mut zip = archiver_rs::Zip::open(zip_file_path.as_path()).map_err(|e| PgEmbedError {
         error_type: PgEmbedErrorType::ReadFileError,
         source: Some(Box::new(e)),
-        message: Some(format!("Could not read zip file {}", zip_file_path.display())),
+        message: Some(format!("Could not read zip file {}", zip_file_path.display()))
     })?;
     let file_name = zip
         .files()
