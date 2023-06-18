@@ -1,6 +1,6 @@
 [package]
 name = "pg-embed"
-version = "0.7.1"
+version = "0.7.2"
 license = "MIT/Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/faokunega/pg-embed"
@@ -17,23 +17,23 @@ default = ["rt_tokio_migrate"]
 rt_tokio = ["tokio", "reqwest"]
 rt_tokio_migrate = ["tokio", "reqwest", "sqlx_tokio"]
 # please don't select the following features
-rt_async_std = ["async-std", "surf"]
+rt_async_std = ["async-std"]
 rt_actix = ["tokio", "reqwest"]
-rt_async_std_migrate = ["async-std", "surf", "sqlx_async_std"]
+rt_async_std_migrate = ["async-std", "sqlx_async_std"]
 rt_actix_migrate = ["tokio", "reqwest", "sqlx_actix"]
 
 [dependencies]
 reqwest = { version = "0.11", optional = true }
-surf = { version = "2.2", optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
 async-std = { version = "1.9.0", features = ["attributes"], optional = true }
 futures = "0.3"
 thiserror = "1.0"
-archiver-rs = "0.5"
+# Waiting for https://github.com/JoyMoe/archiver-rs/pull/6
+archiver-rs = { git = "https://github.com/gz/archiver-rs.git", branch = "patch-1" }
 sqlx_tokio = { version = "0.6", features = ["runtime-tokio-rustls", "postgres", "migrate"], package = "sqlx", optional = true }
 sqlx_async_std = { version = "0.6", features = ["runtime-async-std-rustls", "postgres", "migrate"], package = "sqlx", optional = true }
 sqlx_actix = { version = "0.6", features = ["runtime-actix-rustls", "postgres", "migrate"], package = "sqlx", optional = true }
-zip = "0.5.11"
+zip = "0.6"
 log = "0.4"
 dirs = "3.0"
 bytes = "1.0"
@@ -42,7 +42,7 @@ async-trait = "0.1"
 
 [dev-dependencies]
 serial_test = "0.5"
-env_logger = "0.8"
+env_logger = "0.10"
 
 [[test]]
 name = "migration_tokio"

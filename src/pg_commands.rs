@@ -38,6 +38,13 @@ impl PgCommand {
             auth_host,
             "-U",
             user,
+            // The postgres-tokio driver uses utf8 encoding, however on windows
+            // if -E is not specified WIN1252 encoding is chosen by default
+            // which can lead to encoding errors like this:
+            //
+            // ERROR: character with byte sequence 0xe0 0xab 0x87 in encoding
+            // "UTF8" has no equivalent in encoding "WIN1252"
+            "-E=UTF8",
             "-D",
             database_dir.to_str().unwrap(),
             &password_file_arg,

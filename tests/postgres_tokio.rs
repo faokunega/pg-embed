@@ -7,8 +7,8 @@ use tokio::sync::Mutex;
 use env_logger::Env;
 use pg_embed::pg_access::PgAccess;
 use pg_embed::pg_enums::{PgAuthMethod, PgServerStatus};
-use pg_embed::pg_errors::{PgEmbedError, PgEmbedErrorType};
-use pg_embed::pg_fetch::{PgFetchSettings, PG_V13};
+use pg_embed::pg_errors::{PgEmbedError};
+use pg_embed::pg_fetch::{PgFetchSettings, PG_V15};
 use pg_embed::postgres::{PgEmbed, PgSettings};
 use std::time::Duration;
 
@@ -144,7 +144,7 @@ async fn postgres_server_timeout() -> Result<(), PgEmbedError> {
     let _ = env_logger::Builder::from_env(Env::default().default_filter_or("info"))
         .is_test(true)
         .try_init();
-    let mut pg_settings = PgSettings {
+    let pg_settings = PgSettings {
         database_dir,
         port: 5432,
         user: "postgres".to_string(),
@@ -155,7 +155,7 @@ async fn postgres_server_timeout() -> Result<(), PgEmbedError> {
         migration_dir: None,
     };
     let fetch_settings = PgFetchSettings {
-        version: PG_V13,
+        version: PG_V15,
         ..Default::default()
     };
     let mut pg = PgEmbed::new(pg_settings, fetch_settings).await?;
