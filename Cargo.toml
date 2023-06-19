@@ -8,7 +8,12 @@ documentation = "https://docs.rs/pg-embed"
 description = "Run a Postgresql database locally on Linux, MacOS or Windows as part of another Rust application or test."
 edition = "2018"
 keywords = ["database", "postgres", "postgresql", "embedded", "server"]
-categories = ["database", "database-implementations", "development-tools", "asynchronous"]
+categories = [
+    "database",
+    "database-implementations",
+    "development-tools",
+    "asynchronous",
+]
 authors = ["Franz-Aliu Okunega <aokunega@gmail.com>"]
 
 [features]
@@ -23,16 +28,28 @@ rt_async_std_migrate = ["async-std", "sqlx_async_std"]
 rt_actix_migrate = ["tokio", "reqwest", "sqlx_actix"]
 
 [dependencies]
-reqwest = { version = "0.11", optional = true }
+reqwest = { version = "0.11", optional = true, default-features = false }
 tokio = { version = "1", features = ["full"], optional = true }
 async-std = { version = "1.9.0", features = ["attributes"], optional = true }
 futures = "0.3"
 thiserror = "1.0"
 # Waiting for https://github.com/JoyMoe/archiver-rs/pull/6
 archiver-rs = { git = "https://github.com/gz/archiver-rs.git", branch = "patch-1" }
-sqlx_tokio = { version = "0.6", features = ["runtime-tokio-rustls", "postgres", "migrate"], package = "sqlx", optional = true }
-sqlx_async_std = { version = "0.6", features = ["runtime-async-std-rustls", "postgres", "migrate"], package = "sqlx", optional = true }
-sqlx_actix = { version = "0.6", features = ["runtime-actix-rustls", "postgres", "migrate"], package = "sqlx", optional = true }
+sqlx_tokio = { version = "0.6", features = [
+    "runtime-tokio-rustls",
+    "postgres",
+    "migrate",
+], package = "sqlx", optional = true }
+sqlx_async_std = { version = "0.6", features = [
+    "runtime-async-std-rustls",
+    "postgres",
+    "migrate",
+], package = "sqlx", optional = true }
+sqlx_actix = { version = "0.6", features = [
+    "runtime-actix-rustls",
+    "postgres",
+    "migrate",
+], package = "sqlx", optional = true }
 zip = "0.6"
 log = "0.4"
 dirs = "3.0"
