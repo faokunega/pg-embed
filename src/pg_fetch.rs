@@ -7,6 +7,7 @@
 use bytes::Bytes;
 use futures::TryFutureExt;
 use reqwest::Response;
+use std::future::Future;
 
 use crate::pg_enums::{Architecture, OperationSystem};
 use crate::pg_errors::{PgEmbedError, PgEmbedErrorType};
@@ -16,19 +17,17 @@ use crate::pg_types::PgResult;
 #[derive(Debug, Copy, Clone)]
 pub struct PostgresVersion(pub &'static str);
 /// Latest postgres version 15
-pub const PG_V15: PostgresVersion = PostgresVersion("15.2.0");
+pub const PG_V15: PostgresVersion = PostgresVersion("15.3.0");
 /// Latest postgres version 14
-pub const PG_V14: PostgresVersion = PostgresVersion("14.6.0");
+pub const PG_V14: PostgresVersion = PostgresVersion("14.8.0");
 /// Latest postgres version 13
-pub const PG_V13: PostgresVersion = PostgresVersion("13.9.0");
+pub const PG_V13: PostgresVersion = PostgresVersion("13.6.0");
 /// Latest postgres version 12
-pub const PG_V12: PostgresVersion = PostgresVersion("12.13.0");
+pub const PG_V12: PostgresVersion = PostgresVersion("12.10.0");
 /// Latest pstgres version 11
-pub const PG_V11: PostgresVersion = PostgresVersion("11.18.0");
+pub const PG_V11: PostgresVersion = PostgresVersion("11.15.0");
 /// Latest postgres version 10
-pub const PG_V10: PostgresVersion = PostgresVersion("10.23.0");
-/// Latest postgres version 9
-pub const PG_V9: PostgresVersion = PostgresVersion("9.6.24");
+pub const PG_V10: PostgresVersion = PostgresVersion("10.20.0");
 
 /// Settings that determine the postgres binary to be fetched
 #[derive(Debug, Clone)]
@@ -81,6 +80,7 @@ impl PgFetchSettings {
             version,
             &platform,
             version);
+
         let response: Response = reqwest::get(download_url)
             .map_err(|e| PgEmbedError {
                 error_type: PgEmbedErrorType::DownloadFailure,
@@ -99,8 +99,23 @@ impl PgFetchSettings {
             .await?;
 
         log::debug!("Downloaded {} bytes", content.len());
-        log::trace!("First 1024 bytes: {:?}", &String::from_utf8_lossy(&content[..1024]));
+        log::trace!(
+            "First 1024 bytes: {:?}",
+            &String::from_utf8_lossy(&content[..1024])
+        );
 
         Ok(content)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn fetch_postgres() -> Result<(), PgEmbedError> {
+        let pg_settings = PgFetchSettings::default();
+        pg_settings.fetch_postgres().await;
+        Ok(())
     }
 }

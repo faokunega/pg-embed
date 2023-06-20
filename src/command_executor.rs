@@ -190,7 +190,6 @@ where
         // let _ = tokio::task::spawn(async { Self::log_output(receiver).await });
         res
     }
-
 }
 
 #[async_trait]

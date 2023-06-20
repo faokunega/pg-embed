@@ -21,16 +21,11 @@ default = ["rt_tokio_migrate"]
 # for now only rt_tokio or rt_tokio_migrate can be used
 rt_tokio = ["tokio", "reqwest"]
 rt_tokio_migrate = ["tokio", "reqwest", "sqlx_tokio"]
-# please don't select the following features
-rt_async_std = ["async-std"]
-rt_actix = ["tokio", "reqwest"]
-rt_async_std_migrate = ["async-std", "sqlx_async_std"]
-rt_actix_migrate = ["tokio", "reqwest", "sqlx_actix"]
 
 [dependencies]
-reqwest = { version = "0.11", optional = true, default-features = false }
+reqwest = { version = "0.11", optional = true }
+#reqwest = { version = "0.11", optional = true, default-features = false }
 tokio = { version = "1", features = ["full"], optional = true }
-async-std = { version = "1.9.0", features = ["attributes"], optional = true }
 futures = "0.3"
 thiserror = "1.0"
 # Waiting for https://github.com/JoyMoe/archiver-rs/pull/6
@@ -40,41 +35,21 @@ sqlx_tokio = { version = "0.6", features = [
     "postgres",
     "migrate",
 ], package = "sqlx", optional = true }
-sqlx_async_std = { version = "0.6", features = [
-    "runtime-async-std-rustls",
-    "postgres",
-    "migrate",
-], package = "sqlx", optional = true }
-sqlx_actix = { version = "0.6", features = [
-    "runtime-actix-rustls",
-    "postgres",
-    "migrate",
-], package = "sqlx", optional = true }
 zip = "0.6"
 log = "0.4"
-dirs = "3.0"
+dirs = "5.0.1"
 bytes = "1.0"
 lazy_static = "1.4"
 async-trait = "0.1"
 
 [dev-dependencies]
-serial_test = "0.5"
+serial_test = "2.0.0"
 env_logger = "0.10"
 
 [[test]]
 name = "migration_tokio"
 path = "tests/migration_tokio.rs"
 required-features = ["rt_tokio_migrate"]
-
-[[test]]
-name = "migration_actix"
-path = "tests/migration_actix.rs"
-required-features = ["rt_actix_migrate"]
-
-[[test]]
-name = "migration_async_std"
-path = "tests/migration_async_std.rs"
-required-features = ["rt_async_std_migrate"]
 
 [[test]]
 name = "postgres_tokio1"
@@ -85,13 +60,3 @@ required-features = ["rt_tokio"]
 name = "postgres_tokio2"
 path = "tests/postgres_tokio.rs"
 required-features = ["rt_tokio_migrate"]
-
-[[test]]
-name = "postgres_actix"
-path = "tests/postgres_actix.rs"
-required-features = ["rt_actix"]
-
-[[test]]
-name = "postgres_async_std"
-path = "tests/postgres_async_std.rs"
-required-features = ["rt_async_std"]

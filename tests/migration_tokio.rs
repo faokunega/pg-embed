@@ -10,6 +10,7 @@ use sqlx_async_std::{Connection, PgConnection};
 #[cfg(feature = "sqlx_tokio")]
 use sqlx_tokio::{Connection, PgConnection};
 
+#[path = "common.rs"]
 mod common;
 
 #[tokio::test]

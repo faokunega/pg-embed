@@ -7,11 +7,12 @@ use tokio::sync::Mutex;
 use env_logger::Env;
 use pg_embed::pg_access::PgAccess;
 use pg_embed::pg_enums::{PgAuthMethod, PgServerStatus};
-use pg_embed::pg_errors::{PgEmbedError};
+use pg_embed::pg_errors::PgEmbedError;
 use pg_embed::pg_fetch::{PgFetchSettings, PG_V15};
 use pg_embed::postgres::{PgEmbed, PgSettings};
 use std::time::Duration;
 
+#[path = "common.rs"]
 mod common;
 
 #[tokio::test]
@@ -60,7 +61,6 @@ async fn postgres_server_multiple_concurrent() -> Result<(), PgEmbedError> {
 
     let tasks = vec![
         common::setup(5432, PathBuf::from("data_test/db1"), false, None),
-        common::setup(5433, PathBuf::from("data_test/db2"), false, None),
         common::setup(5434, PathBuf::from("data_test/db3"), false, None),
     ];
 

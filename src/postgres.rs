@@ -26,8 +26,8 @@ use crate::pg_access::PgAccess;
 use crate::pg_commands::PgCommand;
 use crate::pg_enums::{PgAuthMethod, PgServerStatus};
 use crate::pg_errors::{PgEmbedError, PgEmbedErrorType};
-use crate::pg_types::PgResult;
 use crate::pg_fetch;
+use crate::pg_types::PgResult;
 
 ///
 /// Database settings

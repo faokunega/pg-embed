@@ -13,10 +13,9 @@ use tokio::sync::Mutex;
 
 use crate::pg_enums::{OperationSystem, PgAcquisitionStatus};
 use crate::pg_errors::{PgEmbedError, PgEmbedErrorType};
-use crate::pg_fetch::{PgFetchSettings};
+use crate::pg_fetch::PgFetchSettings;
 use crate::pg_types::{PgCommandSync, PgResult};
 use crate::pg_unpack;
-
 
 lazy_static! {
     ///
@@ -159,15 +158,16 @@ impl PgAccess {
         lock.insert(self.cache_dir.clone(), PgAcquisitionStatus::InProgress);
         let pg_bin_data = self.fetch_settings.fetch_postgres().await?;
         self.write_pg_zip(&pg_bin_data).await?;
-        log::debug!("Unpacking postgres binaries {} {}", self.zip_file_path.display(), self.cache_dir.display());
-        pg_unpack::unpack_postgres(&self.zip_file_path, &self.cache_dir)
-            .await?;
+        log::debug!(
+            "Unpacking postgres binaries {} {}",
+            self.zip_file_path.display(),
+            self.cache_dir.display()
+        );
+        pg_unpack::unpack_postgres(&self.zip_file_path, &self.cache_dir).await?;
 
         lock.insert(self.cache_dir.clone(), PgAcquisitionStatus::Finished);
         Ok(())
-
     }
-
 
     ///
     /// Check if postgresql executables are already cached
@@ -180,7 +180,8 @@ impl PgAccess {
     /// Check if database files exist
     ///
     pub async fn db_files_exist(&self) -> PgResult<bool> {
-        Ok(self.pg_executables_cached().await? && Self::path_exists(self.pg_version_file.as_path()).await?)
+        Ok(self.pg_executables_cached().await?
+            && Self::path_exists(self.pg_version_file.as_path()).await?)
     }
 
     ///
@@ -243,7 +244,8 @@ impl PgAccess {
                 error_type: PgEmbedErrorType::WriteFileError,
                 source: Some(Box::new(e)),
                 message: None,
-            }).await?;
+            })
+            .await?;
         Ok(())
     }
 
