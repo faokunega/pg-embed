@@ -17,7 +17,7 @@ use crate::pg_types::PgResult;
 /// Returns `Ok(PathBuf(txz_file_path))` file path of the txz archive on success, otherwise returns an error.
 ///
 fn unzip_txz(zip_file_path: &PathBuf, cache_dir: &PathBuf) -> Result<PathBuf, PgEmbedError> {
-    let zip_file = File::open(&zip_file_path).map_err(|e| PgEmbedError {
+    let zip_file = File::open(zip_file_path).map_err(|e| PgEmbedError {
         error_type: PgEmbedErrorType::ReadFileError,
         source: Some(Box::new(e)),
         message: Some(format!(
@@ -45,7 +45,7 @@ fn unzip_txz(zip_file_path: &PathBuf, cache_dir: &PathBuf) -> Result<PathBuf, Pg
         })?;
         if file.name().ends_with(".txz") {
             let txz_path = cache_dir.join(file.name());
-            let mut txz_file = File::create(&txz_path).map_err(|e| PgEmbedError {
+            let txz_file = File::create(&txz_path).map_err(|e| PgEmbedError {
                 error_type: PgEmbedErrorType::WriteFileError,
                 source: Some(Box::new(e)),
                 message: Some(format!(
@@ -88,7 +88,7 @@ fn decompress_xz(zip_file_path: &PathBuf) -> Result<PathBuf, PgEmbedError> {
     })?;
     let xz_decoder = XzDecoder::new(xz_file);
     let target_path = zip_file_path.with_extension("tar");
-    let mut tar_file = File::create(&target_path).map_err(|e| PgEmbedError {
+    let tar_file = File::create(&target_path).map_err(|e| PgEmbedError {
         error_type: PgEmbedErrorType::WriteFileError,
         source: Some(Box::new(e)),
         message: Some(format!(
@@ -137,7 +137,7 @@ fn decompress_tar(file_path: &PathBuf, cache_dir: &PathBuf) -> Result<(), PgEmbe
 /// Returns `Ok(())` on success, otherwise returns an error.
 ///
 pub async fn unpack_postgres(zip_file_path: &PathBuf, cache_dir: &PathBuf) -> PgResult<()> {
-    let txz_file_path = unzip_txz(&zip_file_path, &cache_dir)?;
+    let txz_file_path = unzip_txz(zip_file_path, cache_dir)?;
     let tar_file_path = decompress_xz(&txz_file_path)?;
     tokio::fs::remove_file(txz_file_path)
         .await
@@ -146,7 +146,7 @@ pub async fn unpack_postgres(zip_file_path: &PathBuf, cache_dir: &PathBuf) -> Pg
             source: Some(Box::new(e)),
             message: None,
         })?;
-    let _ = decompress_tar(&tar_file_path, &cache_dir)?;
+    decompress_tar(&tar_file_path, cache_dir)?;
     tokio::fs::remove_file(tar_file_path)
         .await
         .map_err(|e| PgEmbedError {
