@@ -29,7 +29,6 @@ tokio = { version = "1", features = ["full"], optional = true }
 futures = "0.3"
 thiserror = "1.0"
 # Waiting for https://github.com/JoyMoe/archiver-rs/pull/6
-archiver-rs = { git = "https://github.com/gz/archiver-rs.git", branch = "patch-1" }
 sqlx_tokio = { version = "0.6", features = [
     "runtime-tokio-rustls",
     "postgres",
@@ -41,6 +40,8 @@ dirs = "5.0.1"
 bytes = "1.0"
 lazy_static = "1.4"
 async-trait = "0.1"
+xz2 = "0.1.7"
+tar = "0.4.39"
 
 [dev-dependencies]
 serial_test = "2.0.0"
