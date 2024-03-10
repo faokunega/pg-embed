@@ -16,6 +16,8 @@ use crate::pg_types::PgResult;
 /// Postgresql version struct (simple version wrapper)
 #[derive(Debug, Copy, Clone)]
 pub struct PostgresVersion(pub &'static str);
+/// Latest postgres version 16
+pub const PG_V16: PostgresVersion = PostgresVersion("16.2.0");
 /// Latest postgres version 15
 pub const PG_V15: PostgresVersion = PostgresVersion("15.3.0");
 /// Latest postgres version 14
