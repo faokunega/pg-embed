@@ -45,6 +45,8 @@ impl PgCommand {
             // ERROR: character with byte sequence 0xe0 0xab 0x87 in encoding
             // "UTF8" has no equivalent in encoding "WIN1252"
             "-E=UTF8",
+            "-c",
+            "max_connections=500",
             "-D",
             database_dir.to_str().unwrap(),
             &password_file_arg,
