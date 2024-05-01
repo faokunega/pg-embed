@@ -23,7 +23,7 @@ rt_tokio = ["tokio", "reqwest"]
 rt_tokio_migrate = ["tokio", "reqwest", "sqlx_tokio"]
 
 [dependencies]
-reqwest = { version = "0.11", optional = true }
+reqwest = { version = "0.12.3", optional = true, default-features = false, features = ["rustls-tls"]}
 #reqwest = { version = "0.11", optional = true, default-features = false }
 tokio = { version = "1", features = ["full"], optional = true }
 futures = "0.3"
