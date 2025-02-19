@@ -18,7 +18,7 @@ The currently supported async runtime for **pg-embed** is [tokio](https://crates
      ```toml
      # Cargo.toml
      [dependencies]
-     pg-embed = { version = "0.8", default-features = false, features = ["rt_tokio"] }
+     pg-embed = { version = "0.9", default-features = false, features = ["rt_tokio"] }
      ```
 
   *Library with sqlx migration support*
@@ -26,7 +26,7 @@ The currently supported async runtime for **pg-embed** is [tokio](https://crates
      ```toml
      # Cargo.toml
      [dependencies]
-     pg-embed = "0.8"
+     pg-embed = "0.9"
      ```
 
 
