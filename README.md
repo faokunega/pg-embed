@@ -18,7 +18,7 @@ The currently supported async runtime for **pg-embed** is [tokio](https://crates
      ```toml
      # Cargo.toml
      [dependencies]
-     pg-embed = { version = "0.7", default-features = false, features = ["rt_tokio"] }
+     pg-embed = { version = "0.8", default-features = false, features = ["rt_tokio"] }
      ```
 
   *Library with sqlx migration support*
@@ -26,87 +26,89 @@ The currently supported async runtime for **pg-embed** is [tokio](https://crates
      ```toml
      # Cargo.toml
      [dependencies]
-     pg-embed = "0.7"
+     pg-embed = "0.8"
      ```
 
 
 # Examples
 
  ```rust
- use pg_embed::postgres::{PgEmbed, PgSettings, PgAuthMethod};
- use pg_embed::fetch;
- use pg_embed::fetch::{PgFetchSettings, PG_V13};
- use std::time::Duration;
- use std::path::PathBuf;
+ use pg_embed::postgres::{PgSettings, PgEmbed};
+use pg_embed::pg_fetch::{PgFetchSettings, PG_V17};
+use pg_embed::pg_enums::PgAuthMethod;
+use std::time::Duration;
+use std::path::PathBuf;
 
- /// Postgresql settings
- let pg_settings = PgSettings{
-     // Where to store the postgresql database
-     database_dir: PathBuf::from("data/db"),
-     port: 5432,
-     user: "postgres".to_string(),
-     password: "password".to_string(),
-     // authentication method
-     auth_method: PgAuthMethod::Plain,
-     // If persistent is false clean up files and directories on drop, otherwise keep them
-     persistent: false,
-     // duration to wait before terminating process execution
-     // pg_ctl start/stop and initdb timeout
-     // if set to None the process will not be terminated
-     timeout: Some(Duration::from_secs(15)),
-     // If migration sql scripts need to be run, the directory containing those scripts can be
-     // specified here with `Some(PathBuf(path_to_dir)), otherwise `None` to run no migrations.
-     // To enable migrations view the **Usage** section for details
-     migration_dir: None,
- };
+#[tokio::main]
+async fn main() -> Result<(), pg_embed::pg_errors::PgEmbedError> {
+    /// Postgresql settings
+    let pg_settings = PgSettings {
+        // Where to store the postgresql database
+        database_dir: PathBuf::from("data/db"),
+        port: 5432,
+        user: "postgres".to_string(),
+        password: "password".to_string(),
+        // authentication method
+        auth_method: PgAuthMethod::Plain,
+        // If persistent is false clean up files and directories on drop, otherwise keep them
+        persistent: false,
+        // duration to wait before terminating process execution
+        // pg_ctl start/stop and initdb timeout
+        // if set to None the process will not be terminated
+        timeout: Some(Duration::from_secs(15)),
+        // If migration sql scripts need to be run, the directory containing those scripts can be
+        // specified here with `Some(PathBuf(path_to_dir)), otherwise `None` to run no migrations.
+        // To enable migrations view the **Usage** section for details
+        migration_dir: None,
+    };
 
- /// Postgresql binaries download settings
- let fetch_settings = PgFetchSettings{
-        version: PG_V13,
+    /// Postgresql binaries download settings
+    let fetch_settings = PgFetchSettings {
+        version: PG_V17,
         ..Default::default()
- };
+    };
 
+    // Use an async block that returns `Result`
+    // Create a new instance
+    let mut pg = PgEmbed::new(pg_settings, fetch_settings).await?;
 
- /// async block only to show that these methods need to be executed in an async context
- async { 
-     // Create a new instance
-     let mut pg = PgEmbed::new(pg_settings, fetch_settings).await?;
+    // Download, unpack, create password file and database cluster
+    pg.setup().await?;
 
-     // Download, unpack, create password file and database cluster
-     pg.setup().await;
+    // start postgresql database
+    pg.start_db().await?;
 
-     // start postgresql database
-     pg.start_db().await;
+    // create a new database
+    // to enable migrations view the [Usage] section for details
+    pg.create_database("database_name").await?;
 
-     // create a new database
-     // to enable migrations view the [Usage] section for details
-     pg.create_database("database_name").await;
+    // drop a database
+    // to enable migrations view [Usage] for details
+    pg.drop_database("database_name").await?;
 
-     // drop a database
-     // to enable migrations view [Usage] for details
-     pg.drop_database("database_name").await;
+    // get the base postgresql uri
+    // `postgres://{username}:{password}@localhost:{port}`
+    let pg_uri: &str = &pg.db_uri;
 
-     // check database existence
-     // to enable migrations view [Usage] for details
-     pg.database_exists("database_name").await;
+    // get a postgresql database uri
+    // `postgres://{username}:{password}@localhost:{port}/{specified_database_name}`
+    let pg_db_uri: String = pg.full_db_uri("database_name");
 
-     // run migration sql scripts
-     // to enable migrations view [Usage] for details
-     pg.migrate("database_name").await;
-     
-     // stop postgresql database
-     pg.stop_db().await;
-};
-// get the base postgresql uri
-     // `postgres://{username}:{password}@localhost:{port}`
-     let pg_uri: &str = &pg.db_uri;
+    // check database existence
+    // to enable migrations view [Usage] for details
+    pg.database_exists("database_name").await?;
 
-     // get a postgresql database uri
-     // `postgres://{username}:{password}@localhost:{port}/{specified_database_name}`
-     let pg_db_uri: String = pg.full_db_uri("database_name");
+    // run migration sql scripts
+    // to enable migrations view [Usage] for details
+    pg.migrate("database_name").await?;
 
+    // stop postgresql database
+    pg.stop_db().await?;
 
-
+    // Return success
+    println!("PostgreSQL setup completed successfully!");
+    Ok(())
+}
  ```
 ## Info
 

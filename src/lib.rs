@@ -36,82 +36,83 @@
 //!
 //! # Examples
 //!
-//! ```rust, ignore
-//!
-//! use pg_embed::postgres::{PgEmbed, PgSettings, PgAuthMethod};
-//! use pg_embed::pg_fetch;
-//! use pg_embed::pg_fetch::{PgFetchSettings, PG_V13};
+//! ```
+//! use pg_embed::postgres::{PgSettings, PgEmbed};
+//! use pg_embed::pg_fetch::{PgFetchSettings, PG_V17};
+//! use pg_embed::pg_enums::PgAuthMethod;
 //! use std::time::Duration;
 //! use std::path::PathBuf;
 //!
-//! /// Postgresql settings
-//! let pg_settings = PgSettings{
-//! // Where to store the postgresql database
-//! database_dir: PathBuf::from("data/db"),
-//! port: 5432,
-//! user: "postgres".to_string(),
-//! password: "password".to_string(),
-//! // authentication method
-//! auth_method: PgAuthMethod::Plain,
-//! // If persistent is false clean up files and directories on drop, otherwise keep them
-//! persistent: false,
-//! // duration to wait before terminating process execution
-//! // pg_ctl start/stop and initdb timeout
-//! // if set to None the process will not be terminated
-//! timeout: Some(Duration::from_secs(15)),
-//! // If migration sql scripts need to be run, the directory containing those scripts can be
-//! // specified here with `Some(PathBuf(path_to_dir)), otherwise `None` to run no migrations.
-//! // To enable migrations view the **Usage** section for details
-//! migration_dir: None,
-//! };
+//! #[tokio::main]
+//! async fn main() -> Result<(), pg_embed::pg_errors::PgEmbedError> {
+//!     /// Postgresql settings
+//!     let pg_settings = PgSettings {
+//!         // Where to store the postgresql database
+//!         database_dir: PathBuf::from("data/db"),
+//!         port: 5432,
+//!         user: "postgres".to_string(),
+//!         password: "password".to_string(),
+//!         // authentication method
+//!         auth_method: PgAuthMethod::Plain,
+//!         // If persistent is false clean up files and directories on drop, otherwise keep them
+//!         persistent: false,
+//!         // duration to wait before terminating process execution
+//!         // pg_ctl start/stop and initdb timeout
+//!         // if set to None the process will not be terminated
+//!         timeout: Some(Duration::from_secs(15)),
+//!         // If migration sql scripts need to be run, the directory containing those scripts can be
+//!         // specified here with `Some(PathBuf(path_to_dir)), otherwise `None` to run no migrations.
+//!         // To enable migrations view the **Usage** section for details
+//!         migration_dir: None,
+//!     };
 //!
-//! /// Postgresql binaries download settings
-//! let fetch_settings = PgFetchSettings{
-//! version: PG_V13,
-//! ..Default::default()
-//! };
+//!     /// Postgresql binaries download settings
+//!     let fetch_settings = PgFetchSettings {
+//!         version: PG_V17,
+//!         ..Default::default()
+//!     };
 //!
+//!     // Use an async block that returns `Result`
+//!     // Create a new instance
+//!     let mut pg = PgEmbed::new(pg_settings, fetch_settings).await?;
 //!
-//! /// async block only to show that these methods need to be executed in an async context
-//! async {
-//!      // Create a new instance
-//!      let mut pg = PgEmbed::new(pg_settings, fetch_settings).await?;
+//!     // Download, unpack, create password file and database cluster
+//!     pg.setup().await?;
 //!
-//!      // Download, unpack, create password file and database cluster
-//!      pg.setup().await;
+//!     // start postgresql database
+//!     pg.start_db().await?;
 //!
-//!      // start postgresql database
-//!      pg.start_db().await;
+//!     // create a new database
+//!     // to enable migrations view the [Usage] section for details
+//!     pg.create_database("database_name").await?;
 //!
-//!      // create a new database
-//!      // to enable migrations view the [Usage] section for details
-//!      pg.create_database("database_name").await;
+//!     // drop a database
+//!     // to enable migrations view [Usage] for details
+//!     pg.drop_database("database_name").await?;
 //!
-//!      // drop a database
-//!      // to enable migrations view [Usage] for details
-//!      pg.drop_database("database_name").await;
+//!     // get the base postgresql uri
+//!     // `postgres://{username}:{password}@localhost:{port}`
+//!     let pg_uri: &str = &pg.db_uri;
 //!
-//!      // check database existence
-//!      // to enable migrations view [Usage] for details
-//!      pg.database_exists("database_name").await;
+//!     // get a postgresql database uri
+//!     // `postgres://{username}:{password}@localhost:{port}/{specified_database_name}`
+//!     let pg_db_uri: String = pg.full_db_uri("database_name");
 //!
-//!      // run migration sql scripts
-//!      // to enable migrations view [Usage] for details
-//!      pg.migrate("database_name").await;
+//!     // check database existence
+//!     // to enable migrations view [Usage] for details
+//!     pg.database_exists("database_name").await?;
 //!
-//!      // stop postgresql database
-//!      pg.stop_db().await;
-//! };
-//! // get the base postgresql uri
-//! // `postgres://{username}:{password}@localhost:{port}`
-//! let pg_uri: &str = &pg.db_uri;
+//!     // run migration sql scripts
+//!     // to enable migrations view [Usage] for details
+//!     pg.migrate("database_name").await?;
 //!
-//! // get a postgresql database uri
-//! // `postgres://{username}:{password}@localhost:{port}/{specified_database_name}`
-//! let pg_db_uri: String = pg.full_db_uri("database_name");
+//!     // stop postgresql database
+//!     pg.stop_db().await?;
 //!
-//!
-//!
+//!     // Return success
+//!     println!("PostgreSQL setup completed successfully!");
+//!     Ok(())
+//! }
 //! ```
 //! ## Info
 //!
@@ -150,30 +151,8 @@
 extern crate dirs;
 #[macro_use]
 extern crate lazy_static;
-#[cfg(not(any(
-    feature = "rt_tokio_migrate",
-    feature = "rt_tokio",
-    feature = "rt_actix_migrate",
-    feature = "rt_actix",
-    feature = "rt_async_std_migrate",
-    feature = "rt_async_std",
-)))]
-compile_error!(
-    "one of the features ['rt_tokio_migrate', 'rt_tokio', \
-     'rt_actix_migrate', 'rt_actix', 'rt_async_std_migrate', \
-     'rt_async_std'] must be enabled"
-);
-
-#[cfg(any(
-    all(feature = "rt_tokio", feature = "rt_async_std"),
-    all(feature = "rt_tokio", feature = "rt_async_std_migrate"),
-    all(feature = "rt_tokio_migrate", feature = "rt_async_std"),
-    all(feature = "rt_tokio_migrate", feature = "rt_async_std_migrate"),
-))]
-compile_error!(
-    "only one of ['rt_tokio', 'rt_tokio_migrate', \
-     'rt_async_std', 'rt_async_std_migrate'] can be enabled"
-);
+#[cfg(not(any(feature = "rt_tokio_migrate", feature = "rt_tokio",)))]
+compile_error!("one of the features ['rt_tokio_migrate', 'rt_tokio'] must be enabled");
 
 pub mod command_executor;
 pub mod pg_access;

@@ -15,11 +15,11 @@ use log::{error, info};
 use tokio::sync::Mutex;
 
 #[cfg(feature = "rt_tokio_migrate")]
-use sqlx_tokio::migrate::{MigrateDatabase, Migrator};
+use sqlx::migrate::{MigrateDatabase, Migrator};
 #[cfg(feature = "rt_tokio_migrate")]
-use sqlx_tokio::postgres::PgPoolOptions;
+use sqlx::postgres::PgPoolOptions;
 #[cfg(feature = "rt_tokio_migrate")]
-use sqlx_tokio::Postgres;
+use sqlx::Postgres;
 
 use crate::command_executor::AsyncCommand;
 use crate::pg_access::PgAccess;
@@ -233,11 +233,7 @@ impl PgEmbed {
     ///
     /// Create a database
     ///
-    #[cfg(any(
-        feature = "rt_tokio_migrate",
-        feature = "rt_async_std_migrate",
-        feature = "rt_actix_migrate"
-    ))]
+    #[cfg(any(feature = "rt_tokio_migrate"))]
     pub async fn create_database(&self, db_name: &str) -> PgResult<()> {
         Postgres::create_database(&self.full_db_uri(db_name))
             .map_err(|e| PgEmbedError {
@@ -252,11 +248,7 @@ impl PgEmbed {
     ///
     /// Drop a database
     ///
-    #[cfg(any(
-        feature = "rt_tokio_migrate",
-        feature = "rt_async_std_migrate",
-        feature = "rt_actix_migrate"
-    ))]
+    #[cfg(any(feature = "rt_tokio_migrate"))]
     pub async fn drop_database(&self, db_name: &str) -> PgResult<()> {
         Postgres::drop_database(&self.full_db_uri(db_name))
             .map_err(|e| PgEmbedError {
@@ -271,11 +263,7 @@ impl PgEmbed {
     ///
     /// Check database existence
     ///
-    #[cfg(any(
-        feature = "rt_tokio_migrate",
-        feature = "rt_async_std_migrate",
-        feature = "rt_actix_migrate"
-    ))]
+    #[cfg(any(feature = "rt_tokio_migrate"))]
     pub async fn database_exists(&self, db_name: &str) -> PgResult<bool> {
         let result = Postgres::database_exists(&self.full_db_uri(db_name))
             .map_err(|e| PgEmbedError {
@@ -299,11 +287,7 @@ impl PgEmbed {
     ///
     /// Run migrations
     ///
-    #[cfg(any(
-        feature = "rt_tokio_migrate",
-        feature = "rt_async_std_migrate",
-        feature = "rt_actix_migrate"
-    ))]
+    #[cfg(any(feature = "rt_tokio_migrate"))]
     pub async fn migrate(&self, db_name: &str) -> PgResult<()> {
         if let Some(migration_dir) = &self.pg_settings.migration_dir {
             let m = Migrator::new(migration_dir.as_path())
