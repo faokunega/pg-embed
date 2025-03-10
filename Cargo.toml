@@ -54,3 +54,7 @@ required-features = ["rt_tokio"]
 name = "postgres_tokio2"
 path = "tests/postgres_tokio.rs"
 required-features = ["rt_tokio_migrate"]
+
+[[example]]
+name = "example"
+required-features = ["rt_tokio_migrate"]
