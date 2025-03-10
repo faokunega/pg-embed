@@ -67,7 +67,7 @@ pub enum PgEmbedErrorType {
     PgError,
     /// Postgresql binaries download failure
     DownloadFailure,
-    /// Request response bytes convertion failure
+    /// Request response bytes conversion failure
     ConversionFailure,
     /// Channel send error
     SendFailure,

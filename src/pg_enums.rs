@@ -46,7 +46,7 @@ pub enum PgServerStatus {
 }
 
 ///
-/// Postgesql process type
+/// PostgreSQL process type
 ///
 /// Used internally for distinguishing processes being executed
 ///
