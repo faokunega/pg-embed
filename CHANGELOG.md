@@ -1,3 +1,10 @@
+# v0.9.0
+___
+- Updated libraries
+- Updated latest postgresql versions
+- Fixed doc example code
+- adjusted feature flags
+
 # v0.6.5
 ___
 ### Fix

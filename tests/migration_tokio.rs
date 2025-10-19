@@ -3,12 +3,7 @@ use std::path::PathBuf;
 use serial_test::serial;
 
 use pg_embed::pg_errors::{PgEmbedError, PgEmbedErrorType};
-#[cfg(feature = "sqlx_actix")]
-use sqlx_actix::{Connection, PgConnection};
-#[cfg(feature = "sqlx_async_std")]
-use sqlx_async_std::{Connection, PgConnection};
-#[cfg(feature = "sqlx_tokio")]
-use sqlx_tokio::{Connection, PgConnection};
+use sqlx::{Connection, PgConnection};
 
 #[path = "common.rs"]
 mod common;
@@ -66,7 +61,7 @@ async fn db_migration() -> Result<(), PgEmbedError> {
             message: None,
         })?;
 
-    let _ = sqlx_tokio::query("INSERT INTO testing (description) VALUES ('Hello')")
+    let _ = sqlx::query("INSERT INTO testing (description) VALUES ('Hello')")
         .execute(&mut conn)
         .await
         .map_err(|_| PgEmbedError {
@@ -75,7 +70,7 @@ async fn db_migration() -> Result<(), PgEmbedError> {
             message: None,
         })?;
 
-    let rows = sqlx_tokio::query("SELECT * FROM testing")
+    let rows = sqlx::query("SELECT * FROM testing")
         .fetch_all(&mut conn)
         .await
         .map_err(|_| PgEmbedError {
