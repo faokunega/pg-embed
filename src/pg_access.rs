@@ -72,6 +72,9 @@ impl PgAccess {
         pg_ctl.push("bin/pg_ctl");
         // initdb executable
         let mut init_db = cache_dir.clone();
+        #[cfg(target_os = "windows")]
+        init_db.push("bin/initdb.exe");
+        #[cfg(not(target_os = "windows"))]
         init_db.push("bin/initdb");
         // postgres zip file
         let mut zip_file_path = cache_dir.clone();
