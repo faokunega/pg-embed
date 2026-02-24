@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" alt="pg-embed logo" width="320">
+  <img src="assets/logo.jpg" alt="pg-embed logo" width="320">
 </p>
 <h1 align="center">pg-embed</h1>
 
