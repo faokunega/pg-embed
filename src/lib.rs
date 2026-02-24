@@ -42,9 +42,10 @@
 //! use pg_embed::pg_enums::PgAuthMethod;
 //! use std::time::Duration;
 //! use std::path::PathBuf;
+//! use pg_embed::pg_errors::Result;
 //!
 //! #[tokio::main]
-//! async fn main() -> Result<(), pg_embed::pg_errors::PgEmbedError> {
+//! async fn main() -> Result<()> {
 //!     /// Postgresql settings
 //!     let pg_settings = PgSettings {
 //!         // Where to store the postgresql database
@@ -148,9 +149,6 @@
 //! Reliant on the great work being done by [zonkyio/embedded-postgres-binaries](https://github.com/zonkyio/embedded-postgres-binaries) in order to fetch precompiled binaries from [Maven](https://mvnrepository.com/artifact/io.zonky.test.postgres/embedded-postgres-binaries-bom).
 //!
 
-extern crate dirs;
-#[macro_use]
-extern crate lazy_static;
 #[cfg(not(any(feature = "rt_tokio_migrate", feature = "rt_tokio",)))]
 compile_error!("one of the features ['rt_tokio_migrate', 'rt_tokio'] must be enabled");
 

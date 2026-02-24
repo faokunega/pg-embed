@@ -1,12 +1,13 @@
 [package]
 name = "pg-embed"
-version = "0.9.0"
+version = "1.0.0"
 license = "MIT/Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/faokunega/pg-embed"
 documentation = "https://docs.rs/pg-embed"
 description = "Run a Postgresql database locally on Linux, MacOS or Windows as part of another Rust application or test."
-edition = "2021"
+edition = "2024"
+rust-version = "1.88"
 keywords = ["database", "postgres", "postgresql", "embedded", "server"]
 categories = [
     "database",
@@ -23,34 +24,53 @@ rt_tokio = ["tokio", "reqwest"]
 rt_tokio_migrate = ["tokio", "reqwest", "sqlx"]
 
 [dependencies]
-reqwest = { version = "0.12.12", optional = true }
-tokio = { version = "1.43.0", features = ["full"], optional = true }
-futures = "0.3"
-thiserror = "2.0"
-# Waiting for https://github.com/JoyMoe/archiver-rs/pull/6
-archiver-rs = { git = "https://github.com/gz/archiver-rs.git", branch = "patch-1" }
+reqwest = { version = "0.13", optional = true }
+tokio = { version = "1", features = ["full"], optional = true }
+thiserror = "2"
+zip = "8"
+lzma-rs = "0.3"
+tar = "0.4"
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "migrate"], optional = true }
 log = "0.4"
 dirs = "6.0"
-bytes = "1.10"
-lazy_static = "1.5"
-async-trait = "0.1"
 
 [dev-dependencies]
-serial_test = "3.2"
+futures = "0.3"
+serial_test = { version = "3", features = ["file_locks"] }
 env_logger = "0.11"
+tempfile = "3"
 
 [[test]]
-name = "migration_tokio"
-path = "tests/migration_tokio.rs"
-required-features = ["rt_tokio_migrate"]
-
-[[test]]
-name = "postgres_tokio1"
-path = "tests/postgres_tokio.rs"
+name = "lifecycle"
+path = "tests/lifecycle.rs"
 required-features = ["rt_tokio"]
 
 [[test]]
-name = "postgres_tokio2"
-path = "tests/postgres_tokio.rs"
+name = "lifecycle_migrate"
+path = "tests/lifecycle.rs"
+required-features = ["rt_tokio_migrate"]
+
+[[test]]
+name = "auth"
+path = "tests/auth.rs"
+required-features = ["rt_tokio"]
+
+[[test]]
+name = "auth_migrate"
+path = "tests/auth.rs"
+required-features = ["rt_tokio_migrate"]
+
+[[test]]
+name = "database"
+path = "tests/database.rs"
+required-features = ["rt_tokio_migrate"]
+
+[[test]]
+name = "migration"
+path = "tests/migration.rs"
+required-features = ["rt_tokio_migrate"]
+
+[[test]]
+name = "extension"
+path = "tests/extension.rs"
 required-features = ["rt_tokio_migrate"]

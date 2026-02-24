@@ -1,3 +1,40 @@
+# v1.0.0
+___
+### Breaking Changes
+- **MSRV bumped to 1.88** (was 1.80). Driven by `zip` 8.x (1.88) and Rust edition 2024 (1.85).
+- **Rust edition 2024** — `edition = "2024"` in `Cargo.toml`.
+- `async-trait` dependency removed — `AsyncCommand` trait now uses async fn in traits (AFIT, stable since Rust 1.75)
+- `xz2` (C bindings) replaced by `lzma-rs` (pure Rust) for XZ decompression
+- `lazy_static` removed — replaced by `std::sync::LazyLock`
+- `bytes` crate removed as a direct dependency
+- `futures` moved to dev-dependencies only
+
+### Features
+- **Extension installation** — new `PgEmbed::install_extension(dir)` (and `PgAccess::install_extension`) copies pre-built extension files into the binary cache between `setup()` and `start_db()`. Files are routed by extension: `.so`/`.dylib`/`.dll` → `lib/`; `.control`/`.sql` → `share/postgresql/extension/`. The target directory is discovered at runtime so the correct PostgreSQL share layout is used regardless of platform.
+- **PostgreSQL 18 support** — added `PG_V18` constant; default version is now PG 18
+- **Streaming download** — binaries are now streamed directly to disk instead of being buffered in memory (eliminates 100–200 MB peak RAM usage during setup)
+- **Clear error for unsupported platforms** — attempting to download PG 10–13 on Apple Silicon now returns a descriptive `DownloadFailure` error instead of silently receiving corrupt data
+- **`PgAccess::pg_version_file_exists`** — new public helper to check whether a cluster directory has been initialised
+
+### Fixes
+- `Drop` impl now logs errors from `pg_ctl stop` and cleanup instead of discarding them silently
+- Dead binding in `setup()` removed; `initdb` errors now propagate correctly
+- Process output channel closure in `command_executor` is now logged as a warning
+- `pg_access`: path construction uses `PathBuf::join` instead of `clone().push()`, removing unnecessary allocations
+
+### Tests
+- New end-to-end extension test (`tests/extension.rs`) installs a pure-SQL extension, starts the server, runs `CREATE EXTENSION`, and asserts the extension function returns the expected value.
+- Integration tests reorganised into thematic files: `lifecycle.rs`, `auth.rs`, `database.rs`, `migration.rs`, `extension.rs`.
+
+### Dependencies updated
+- `reqwest` 0.13, `tokio` 1.x (latest), `zip` 8.x, `thiserror` 2.x, `tempfile` 3.x, `sqlx` 0.8
+
+### Documentation
+- New **User Handbook** (`docs/user-handbook.md`) — configuration reference, auth methods, migrations, FAQ
+- New **Technical Handbook** (`docs/technical-handbook.md`) — architecture, data flow, module graph, error taxonomy
+- All public API items documented with `///` doc comments
+- New **Extensions** section in `README.md` with a full pgvector-flavoured code example and file-routing table.
+
 # v0.9.0
 ___
 - Updated libraries

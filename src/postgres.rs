@@ -1,16 +1,46 @@
+//! Public API for embedding and managing a PostgreSQL server.
 //!
-//! Postgresql server
+//! The entry point is [`PgEmbed`].  A typical usage sequence is:
 //!
-//! Start, stop, initialize the postgresql server.
-//! Create database clusters and databases.
+//! ```rust,no_run
+//! use pg_embed::postgres::{PgEmbed, PgSettings};
+//! use pg_embed::pg_fetch::{PgFetchSettings, PG_V17};
+//! use pg_embed::pg_enums::PgAuthMethod;
+//! use std::path::PathBuf;
+//! use std::time::Duration;
 //!
+//! # #[tokio::main]
+//! # async fn main() -> pg_embed::pg_errors::Result<()> {
+//! let pg_settings = PgSettings {
+//!     database_dir: PathBuf::from("data/db"),
+//!     port: 5432,
+//!     user: "postgres".to_string(),
+//!     password: "password".to_string(),
+//!     auth_method: PgAuthMethod::Plain,
+//!     persistent: false,
+//!     timeout: Some(Duration::from_secs(15)),
+//!     migration_dir: None,
+//! };
+//!
+//! let fetch_settings = PgFetchSettings { version: PG_V17, ..Default::default() };
+//!
+//! let mut pg = PgEmbed::new(pg_settings, fetch_settings).await?;
+//! pg.setup().await?;
+//! pg.start_db().await?;
+//!
+//! let uri = pg.full_db_uri("mydb");   // postgres://postgres:password@localhost:5432/mydb
+//!
+//! pg.stop_db().await?;
+//! # Ok(())
+//! # }
+//! ```
+
 use std::io::BufRead;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures::TryFutureExt;
 use log::{error, info};
 use tokio::sync::Mutex;
 
@@ -25,80 +55,113 @@ use crate::command_executor::AsyncCommand;
 use crate::pg_access::PgAccess;
 use crate::pg_commands::PgCommand;
 use crate::pg_enums::{PgAuthMethod, PgServerStatus};
-use crate::pg_errors::{PgEmbedError, PgEmbedErrorType};
+use crate::pg_errors::Error;
+use crate::pg_errors::Result;
 use crate::pg_fetch;
-use crate::pg_types::PgResult;
 
-///
-/// Database settings
-///
+/// Configuration for a single embedded PostgreSQL instance.
 pub struct PgSettings {
-    /// postgresql database directory
+    /// Directory that will hold the PostgreSQL cluster data files.
+    ///
+    /// Created automatically if it does not exist.  When [`Self::persistent`]
+    /// is `false` this directory (and [`Self::database_dir`] with a `.pwfile`
+    /// extension) is removed when [`PgEmbed`] is dropped.
     pub database_dir: PathBuf,
-    /// postgresql port
+
+    /// TCP port PostgreSQL will listen on.
     pub port: u16,
-    /// postgresql user name
+
+    /// Name of the initial database superuser.
     pub user: String,
-    /// postgresql password
+
+    /// Password for the superuser, written to a temporary password file and
+    /// passed to `initdb` via `--pwfile`.
     pub password: String,
-    /// authentication
+
+    /// Authentication method written to `pg_hba.conf` by `initdb`.
     pub auth_method: PgAuthMethod,
-    /// persist database
+
+    /// If `false`, the cluster directory and password file are deleted when
+    /// the [`PgEmbed`] instance is dropped.  Set to `true` to keep the data
+    /// across runs.
     pub persistent: bool,
-    /// duration to wait before terminating process execution
-    /// pg_ctl start/stop and initdb timeout
+
+    /// Maximum time to wait for `initdb`, `pg_ctl start`, and `pg_ctl stop`
+    /// to complete.
+    ///
+    /// `None` disables the timeout (the process is waited on indefinitely).
+    /// Exceeding the timeout returns [`Error::PgTimedOutError`].
     pub timeout: Option<Duration>,
-    /// migrations folder
-    /// sql script files to execute on migrate
+
+    /// Directory containing `.sql` migration files.
+    ///
+    /// When `Some`, [`PgEmbed::migrate`] will run all migrations found in
+    /// this directory via sqlx.  `None` disables migrations.
+    /// Requires the `rt_tokio_migrate` feature.
     pub migration_dir: Option<PathBuf>,
 }
 
+/// An embedded PostgreSQL server with full lifecycle management.
 ///
-/// Embedded postgresql database
-///
-/// If the PgEmbed instance is dropped / goes out of scope and postgresql is still
-/// running, the postgresql process will be killed and depending on the [PgSettings::persistent] setting,
-/// file and directories will be cleaned up.
-///
+/// Dropping a [`PgEmbed`] instance that has not been explicitly stopped will
+/// automatically call `pg_ctl stop` synchronously and, if
+/// [`PgSettings::persistent`] is `false`, remove the cluster directory and
+/// password file.
 pub struct PgEmbed {
-    /// Postgresql settings
+    /// Active configuration for this instance.
     pub pg_settings: PgSettings,
-    /// Download settings
+    /// Binary download settings used during [`Self::setup`].
     pub fetch_settings: pg_fetch::PgFetchSettings,
-    /// Database uri `postgres://{username}:{password}@localhost:{port}`
+    /// Base connection URI: `postgres://{user}:{password}@localhost:{port}`.
     pub db_uri: String,
-    /// Postgres server status
+    /// Current server lifecycle state, protected by an async mutex so it can
+    /// be observed from concurrent tasks.
     pub server_status: Arc<Mutex<PgServerStatus>>,
+    /// Set to `true` once a graceful stop has been initiated to prevent the
+    /// `Drop` impl from issuing a duplicate stop.
     pub shutting_down: bool,
-    /// Postgres files access
+    /// File-system paths and I/O helpers for this instance.
     pub pg_access: PgAccess,
 }
 
 impl Drop for PgEmbed {
     fn drop(&mut self) {
         if !self.shutting_down {
-            let _ = self.stop_db_sync();
+            if let Err(e) = self.stop_db_sync() {
+                log::warn!("pg_ctl stop failed during drop: {e}");
+            }
         }
-        if !&self.pg_settings.persistent {
-            let _ = &self.pg_access.clean();
+        if !self.pg_settings.persistent {
+            if let Err(e) = self.pg_access.clean() {
+                log::warn!("cleanup failed during drop: {e}");
+            }
         }
     }
 }
 
 impl PgEmbed {
+    /// Creates a new [`PgEmbed`] instance and prepares the directory structure.
     ///
-    /// Create a new PgEmbed instance
+    /// Does **not** download binaries or start the server.  Call
+    /// [`Self::setup`] followed by [`Self::start_db`] to bring the server up.
     ///
+    /// # Arguments
+    ///
+    /// * `pg_settings` — Server configuration (port, auth, directories, …).
+    /// * `fetch_settings` — Which PostgreSQL version/platform to download.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::DirCreationError`] if the cache or database directories
+    /// cannot be created.
+    /// Returns [`Error::InvalidPgUrl`] if the OS cache directory is unavailable.
     pub async fn new(
         pg_settings: PgSettings,
         fetch_settings: pg_fetch::PgFetchSettings,
-    ) -> PgResult<Self> {
-        let password: &str = &pg_settings.password;
+    ) -> Result<Self> {
         let db_uri = format!(
             "postgres://{}:{}@localhost:{}",
-            &pg_settings.user,
-            &password,
-            pg_settings.port.to_string()
+            &pg_settings.user, &pg_settings.password, pg_settings.port
         );
         let pg_access = PgAccess::new(&fetch_settings, &pg_settings.database_dir).await?;
         Ok(PgEmbed {
@@ -111,12 +174,18 @@ impl PgEmbed {
         })
     }
 
+    /// Downloads the binaries (if needed), writes the password file, and runs
+    /// `initdb` (if the cluster does not already exist).
     ///
-    /// Setup postgresql for execution
+    /// This method is idempotent: if the binaries are already cached and the
+    /// cluster is already initialised it returns immediately after verifying
+    /// both.
     ///
-    /// Download, unpack, create password file and database
+    /// # Errors
     ///
-    pub async fn setup(&mut self) -> PgResult<()> {
+    /// Returns any error from [`PgAccess::maybe_acquire_postgres`],
+    /// [`PgAccess::create_password_file`], or [`Self::init_db`].
+    pub async fn setup(&mut self) -> Result<()> {
         self.pg_access.maybe_acquire_postgres().await?;
         self.pg_access
             .create_password_file(self.pg_settings.password.as_bytes())
@@ -125,17 +194,53 @@ impl PgEmbed {
             let mut server_status = self.server_status.lock().await;
             *server_status = PgServerStatus::Initialized;
         } else {
-            let _r = &self.init_db().await?;
+            self.init_db().await?;
         }
         Ok(())
     }
 
+    /// Installs a third-party PostgreSQL extension into the binary cache.
     ///
-    /// Initialize postgresql database
+    /// Must be called **after** [`Self::setup`] (so the cache directory exists)
+    /// and **before** [`Self::start_db`] (so the server loads the shared
+    /// library on startup).  Once the server is running, activate the extension
+    /// in a specific database with:
     ///
-    /// Returns `Ok(())` on success, otherwise returns an error.
+    /// ```sql
+    /// CREATE EXTENSION IF NOT EXISTS <extension_name>;
+    /// ```
     ///
-    pub async fn init_db(&mut self) -> PgResult<()> {
+    /// Delegates to [`PgAccess::install_extension`].  See that method for the
+    /// file-routing rules (`.so`/`.dylib`/`.dll` → `lib/`;
+    /// `.control`/`.sql` → the PostgreSQL share extension directory).
+    ///
+    /// # Arguments
+    ///
+    /// * `extension_dir` — Directory containing the pre-compiled extension
+    ///   files (shared library + control + SQL scripts).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::DirCreationError`] if the target directories cannot be
+    /// created.
+    /// Returns [`Error::ReadFileError`] if `extension_dir` cannot be read.
+    /// Returns [`Error::WriteFileError`] if a file cannot be copied.
+    pub async fn install_extension(&self, extension_dir: &Path) -> Result<()> {
+        self.pg_access.install_extension(extension_dir).await
+    }
+
+    /// Runs `initdb` to create a new database cluster.
+    ///
+    /// Updates [`Self::server_status`] to [`PgServerStatus::Initializing`]
+    /// before the call and to [`PgServerStatus::Initialized`] on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidPgUrl`] if any path cannot be converted to UTF-8.
+    /// Returns [`Error::PgInitFailure`] if `initdb` cannot be spawned.
+    /// Returns [`Error::PgTimedOutError`] if the process exceeds
+    /// [`PgSettings::timeout`].
+    pub async fn init_db(&mut self) -> Result<()> {
         {
             let mut server_status = self.server_status.lock().await;
             *server_status = PgServerStatus::Initializing;
@@ -154,12 +259,20 @@ impl PgEmbed {
         Ok(())
     }
 
+    /// Starts the PostgreSQL server with `pg_ctl start -w`.
     ///
-    /// Start postgresql database
+    /// Updates [`Self::server_status`] to [`PgServerStatus::Starting`] before
+    /// the call and to [`PgServerStatus::Started`] on success.
     ///
-    /// Returns `Ok(())` on success, otherwise returns an error.
+    /// # Errors
     ///
-    pub async fn start_db(&mut self) -> PgResult<()> {
+    /// Returns [`Error::InvalidPgUrl`] if the cluster path cannot be converted
+    /// to UTF-8.
+    /// Returns [`Error::PgStartFailure`] if the process exits with a non-zero
+    /// status or cannot be spawned.
+    /// Returns [`Error::PgTimedOutError`] if the process exceeds
+    /// [`PgSettings::timeout`].
+    pub async fn start_db(&mut self) -> Result<()> {
         {
             let mut server_status = self.server_status.lock().await;
             *server_status = PgServerStatus::Starting;
@@ -176,12 +289,21 @@ impl PgEmbed {
         Ok(())
     }
 
+    /// Stops the PostgreSQL server with `pg_ctl stop -w`.
     ///
-    /// Stop postgresql database
+    /// Updates [`Self::server_status`] to [`PgServerStatus::Stopping`] before
+    /// the call and to [`PgServerStatus::Stopped`] on success.  Sets
+    /// [`Self::shutting_down`] to `true` so the `Drop` impl does not issue a
+    /// duplicate stop.
     ///
-    /// Returns `Ok(())` on success, otherwise returns an error.
+    /// # Errors
     ///
-    pub async fn stop_db(&mut self) -> PgResult<()> {
+    /// Returns [`Error::InvalidPgUrl`] if the cluster path cannot be converted
+    /// to UTF-8.
+    /// Returns [`Error::PgStopFailure`] if `pg_ctl stop` fails.
+    /// Returns [`Error::PgTimedOutError`] if the process exceeds
+    /// [`PgSettings::timeout`].
+    pub async fn stop_db(&mut self) -> Result<()> {
         {
             let mut server_status = self.server_status.lock().await;
             *server_status = PgServerStatus::Stopping;
@@ -195,12 +317,15 @@ impl PgEmbed {
         Ok(())
     }
 
+    /// Stops the PostgreSQL server synchronously.
     ///
-    /// Stop postgresql database synchronous
+    /// Used by the `Drop` impl where async is unavailable.  Stdout and stderr
+    /// of the `pg_ctl stop` process are forwarded to the [`log`] crate.
     ///
-    /// Returns `Ok(())` on success, otherwise returns an error.
+    /// # Errors
     ///
-    pub fn stop_db_sync(&mut self) -> PgResult<()> {
+    /// Returns [`Error::PgError`] if the process cannot be spawned.
+    pub fn stop_db_sync(&mut self) -> Result<()> {
         self.shutting_down = true;
         let mut stop_db_command = self
             .pg_access
@@ -210,108 +335,137 @@ impl PgEmbed {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| PgEmbedError {
-                error_type: PgEmbedErrorType::PgError,
-                source: Some(Box::new(e)),
-                message: None,
-            })?;
+            .map_err(|e| Error::PgError(e.to_string(), "".to_string()))?;
 
         self.handle_process_io_sync(process)
     }
 
+    /// Drains stdout and stderr of `process`, logging each line.
     ///
-    /// Handle process logging synchronous
+    /// Lines from stdout are logged at `info` level; lines from stderr at
+    /// `error` level.  Read errors are silently ignored (the line is skipped).
     ///
-    pub fn handle_process_io_sync(&self, mut process: std::process::Child) -> PgResult<()> {
-        let reader_out = std::io::BufReader::new(process.stdout.take().unwrap()).lines();
-        let reader_err = std::io::BufReader::new(process.stderr.take().unwrap()).lines();
-        reader_out.for_each(|line| info!("{}", line.unwrap()));
-        reader_err.for_each(|line| error!("{}", line.unwrap()));
+    /// # Arguments
+    ///
+    /// * `process` — A child process with piped stdout/stderr.
+    pub fn handle_process_io_sync(&self, mut process: std::process::Child) -> Result<()> {
+        if let Some(stdout) = process.stdout.take() {
+            std::io::BufReader::new(stdout)
+                .lines()
+                .for_each(|line| {
+                    if let Ok(l) = line {
+                        info!("{}", l);
+                    }
+                });
+        }
+        if let Some(stderr) = process.stderr.take() {
+            std::io::BufReader::new(stderr)
+                .lines()
+                .for_each(|line| {
+                    if let Ok(l) = line {
+                        error!("{}", l);
+                    }
+                });
+        }
         Ok(())
     }
 
+    /// Creates a new PostgreSQL database.
     ///
-    /// Create a database
+    /// Requires the `rt_tokio_migrate` feature.
     ///
-    #[cfg(any(feature = "rt_tokio_migrate"))]
-    pub async fn create_database(&self, db_name: &str) -> PgResult<()> {
+    /// # Arguments
+    ///
+    /// * `db_name` — Name of the database to create.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::PgTaskJoinError`] if the sqlx operation fails.
+    #[cfg(feature = "rt_tokio_migrate")]
+    pub async fn create_database(&self, db_name: &str) -> Result<()> {
         Postgres::create_database(&self.full_db_uri(db_name))
-            .map_err(|e| PgEmbedError {
-                error_type: PgEmbedErrorType::PgTaskJoinError,
-                source: Some(Box::new(e)),
-                message: None,
-            })
-            .await?;
+            .await
+            .map_err(|e| Error::PgTaskJoinError(e.to_string()))?;
         Ok(())
     }
 
+    /// Drops a PostgreSQL database if it exists.
     ///
-    /// Drop a database
+    /// Uses `DROP DATABASE IF EXISTS` semantics: if the database does not
+    /// exist the call succeeds silently.
+    /// Requires the `rt_tokio_migrate` feature.
     ///
-    #[cfg(any(feature = "rt_tokio_migrate"))]
-    pub async fn drop_database(&self, db_name: &str) -> PgResult<()> {
+    /// # Arguments
+    ///
+    /// * `db_name` — Name of the database to drop.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::PgTaskJoinError`] if the sqlx operation fails.
+    #[cfg(feature = "rt_tokio_migrate")]
+    pub async fn drop_database(&self, db_name: &str) -> Result<()> {
         Postgres::drop_database(&self.full_db_uri(db_name))
-            .map_err(|e| PgEmbedError {
-                error_type: PgEmbedErrorType::PgTaskJoinError,
-                source: Some(Box::new(e)),
-                message: None,
-            })
-            .await?;
+            .await
+            .map_err(|e| Error::PgTaskJoinError(e.to_string()))?;
         Ok(())
     }
 
+    /// Returns `true` if a database named `db_name` exists.
     ///
-    /// Check database existence
+    /// Requires the `rt_tokio_migrate` feature.
     ///
-    #[cfg(any(feature = "rt_tokio_migrate"))]
-    pub async fn database_exists(&self, db_name: &str) -> PgResult<bool> {
-        let result = Postgres::database_exists(&self.full_db_uri(db_name))
-            .map_err(|e| PgEmbedError {
-                error_type: PgEmbedErrorType::PgTaskJoinError,
-                source: Some(Box::new(e)),
-                message: None,
-            })
-            .await?;
-        Ok(result)
+    /// # Arguments
+    ///
+    /// * `db_name` — Name of the database to check.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::PgTaskJoinError`] if the sqlx operation fails.
+    #[cfg(feature = "rt_tokio_migrate")]
+    pub async fn database_exists(&self, db_name: &str) -> Result<bool> {
+        Postgres::database_exists(&self.full_db_uri(db_name))
+            .await
+            .map_err(|e| Error::PgTaskJoinError(e.to_string()))
     }
 
+    /// Returns the full connection URI for a specific database.
     ///
-    /// The full database uri
+    /// Format: `postgres://{user}:{password}@localhost:{port}/{db_name}`.
     ///
-    /// (*postgres://{username}:{password}@localhost:{port}/{db_name}*)
+    /// # Arguments
     ///
+    /// * `db_name` — Database name to append to the base URI.
     pub fn full_db_uri(&self, db_name: &str) -> String {
         format!("{}/{}", &self.db_uri, db_name)
     }
 
+    /// Runs sqlx migrations from [`PgSettings::migration_dir`] against `db_name`.
     ///
-    /// Run migrations
+    /// Does nothing if [`PgSettings::migration_dir`] is `None`.
+    /// Requires the `rt_tokio_migrate` feature.
     ///
-    #[cfg(any(feature = "rt_tokio_migrate"))]
-    pub async fn migrate(&self, db_name: &str) -> PgResult<()> {
+    /// # Arguments
+    ///
+    /// * `db_name` — Name of the target database.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::MigrationError`] if the migrator cannot be created or
+    /// if a migration fails.
+    /// Returns [`Error::SqlQueryError`] if the database connection fails.
+    #[cfg(feature = "rt_tokio_migrate")]
+    pub async fn migrate(&self, db_name: &str) -> Result<()> {
         if let Some(migration_dir) = &self.pg_settings.migration_dir {
             let m = Migrator::new(migration_dir.as_path())
-                .map_err(|e| PgEmbedError {
-                    error_type: PgEmbedErrorType::MigrationError,
-                    source: Some(Box::new(e)),
-                    message: None,
-                })
-                .await?;
+                .await
+                .map_err(|e| Error::MigrationError(e.to_string()))?;
             let pool = PgPoolOptions::new()
                 .connect(&self.full_db_uri(db_name))
-                .map_err(|e| PgEmbedError {
-                    error_type: PgEmbedErrorType::SqlQueryError,
-                    source: Some(Box::new(e)),
-                    message: None,
-                })
-                .await?;
+                .await
+                .map_err(|e| Error::SqlQueryError(e.to_string()))?;
             m.run(&pool)
-                .map_err(|e| PgEmbedError {
-                    error_type: PgEmbedErrorType::MigrationError,
-                    source: Some(Box::new(e)),
-                    message: None,
-                })
-                .await?;
+                .await
+                .map_err(|e| Error::MigrationError(e.to_string()))?;
         }
         Ok(())
     }
